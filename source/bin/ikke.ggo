@@ -1,0 +1,103 @@
+package "IKKE - Iterative K-mer Knockout Enrichments"
+
+purpose "RNA motif discovery tool"
+
+usage "ikke -t [test] -c [control] [OPTIONS]"
+
+version "1.0"
+
+args "--file-name=ikke_cmdl --include-getopt --default-optional\
+ --func-name=ikke_cmdline_parser --arg-struct-name=ikke_args_info"
+
+description "IKKE is a C program designed to analyze RNA sequences and identify\
+ enriched motifs in protein-bound RNA.\nThe program follows a structured pipeline\
+ that includes k-mer counting, frequency calculations, and enrichment analysis,\
+ producing a file with ranked k-mers based on their likelihood of being a motif."
+
+
+section "I/O Options"
+sectiondesc="Command line options for input and output processing.\n"
+
+option "test" t
+"Read the protein bound RNA sequences file."
+details="Specify which file you want to be the test sequences. Note that you\
+ can only pass one test file in the command.\n"
+string
+typestr="filename"
+optional
+
+option "control" c
+"Read the controls sequences file."
+details="Specify which file you want to be the control sequences. Note that you\
+ can only pass one control file in the command.\n"
+string
+typestr="filename"
+optional
+
+option "output" o
+"Set the name of the output files."
+details="Specify the default name for the output file. If this option is not\
+ used, the default name is \"motif\".\n"
+string
+typestr="filename"
+optional
+
+option "kmer" k
+"Set the length of k-mers."
+details="Specify the length of the k-mers you want to perform the enrichment\
+ analysis on.\n"
+int
+default="5"
+optional
+
+option "iterations" i
+"Set the number of iterations for ikke."
+details=""
+int
+default="1"
+optional
+
+option "file-delimiter" d
+"Set the delimiter used to separate the values in the output file."
+details="The output of Ikke is by default in CSV format, meaning the values are \
+comma-delimited. By specifying this option, you can change the delimiter used \
+to separate the values. The available delimiters are: comma (,), tab (t), \
+colon (:), vertical bar (|), and space (\" \"). For example, setting \
+`--file-delimiter=\" \"` will change the delimiter to be space-delimited. If \
+using the comma delimiter, the file extension will be \".csv\"; if using the \
+tab delimiter, the file extension will be \".tsv\"; otherwise, the extension \
+will be \".dsv\". Support for other delimiters is currently unavailable.\n"
+string
+typestr="char"
+default=","
+optional
+
+option "no-log" -
+"Don't normalize enrichments to log2."
+details="The enrichment values produced by ikke are by default normalized to\
+ the logarithm base 2. This is done to help visualize the proportional changes\
+ between the test and the control data. By toggling this flag, you can get the\
+ pure enrichment values rather than the normalized values.\n"
+flag
+off
+
+
+section "Algorithms"
+sectiondesc="Select additional algorithms to determine the calculations.\n"
+
+option "enrichments" R
+"Compute the regular enrichments."
+details="This algorithm calculates the R value from all k-mer frequencies in\
+ the given files.\n"
+flag
+off
+
+option "independent-probs" p
+"Calculate the enrichments without the input reads."
+details="Using the dinucleotide and mononucleotide frequencies of the target\
+ data, ikke can make an accurate prediction as to what the enrichment values\
+ should be. As such, when computing the actual frequencies for all k-mers, the\
+ values that deviate the most from the predictions are the most significant,\
+ and are used to discover the motif.\n"
+flag
+off
