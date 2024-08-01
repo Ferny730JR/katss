@@ -1,63 +1,120 @@
 #include <string.h>
 #include <stdbool.h>
 #include <errno.h>
-#include <zlib.h>
-#include "igzip_lib.h"
+#include <stdio.h>
+
+#if _HAS_ISA_L_ == 1
+#  include <igzip_lib.h>
+#else
+#  include <zlib.h>
+#endif
 
 #include "rnafiles.h"
-#include "tinycthread.h"
+#include "tinycthread.h" // for mutex
 #include "memory_utils.h"
+
+#define RNAF_CHUNK 16384
 
 static _Thread_local int rnaferrno_;
 
+typedef enum COMPRESSION_TYPE {
+	GZIP,
+	ZLIB,
+	PLAIN
+} COMPRESSION_TYPE;
+
 struct rnaf_state {
-	gzFile file;
-	unsigned char *carry;
-	unsigned char *next;
-	size_t carry_size;
-	size_t offset;
-	size_t have;
-	unsigned char type;
-	mtx_t mutex;
+	FILE *file;                    /** File pointer */
+	COMPRESSION_TYPE compression;  /** Type of compression, if any */
+	unsigned char type;            /** Type of file, e.g FASTA, FASTQ, or reads */
+#if defined _IGZIP_H                /** Use isa-l if available, otherwise zlib */
+	struct inflate_state stream;   /** Decompressor */
+#else
+	z_stream stream;
+#endif
+
+	unsigned char *in_buf;         /** Input buffer*/
+	unsigned char *out_buf;        /** Output buffer */
+	unsigned char *next;           /** Next available byte in output buffer */
+	size_t have;                   /** Numberof bytes available in next */
+
+	mtx_t mutex;                   /** Mutex for thread safe functions */
+	bool mutex_is_init;            /** Check if mutex is initialized (for rnafclose) */
 };
 
 typedef struct rnaf_state *rnaf_statep;
 static bool extract_mode(rnaf_statep state, const char *mode);
+static COMPRESSION_TYPE determine_compression(FILE *fp);
+static int rnaf_fetch(rnaf_statep state);
+static int rnaf_load(rnaf_statep state, unsigned char *buffer, size_t bufsize, size_t *read);
+static size_t rnaf_fill(rnaf_statep state, unsigned char *buffer, size_t bufsize);
 
 RnaFile
 rnafopen(const char *filename, const char *mode)
 {
 	rnaferrno_ = 0; // no error encountered. yet.
 
-	rnaf_statep rna_file = s_malloc(sizeof *rna_file);
-	rna_file->file = gzopen(filename, "r");
+	rnaf_statep rna_file = s_malloc(sizeof *rna_file); // initialize rna_file
+
+	/* Open file and check for errors */
+	rna_file->file = fopen(filename, "r");
 	if(rna_file->file == NULL) {
 		rnaferrno_ = 1;
 		free(rna_file);
 		return NULL;
 	}
 
-	rna_file->carry_size = 8192;
-	rna_file->carry = s_malloc(rna_file->carry_size * sizeof(unsigned char));
-	rna_file->next = rna_file->carry;
-	rna_file->offset = 0;
-	rna_file->have = 0;
-	rna_file->type = 'N';
-
-	int ret = mtx_init(&rna_file->mutex, mtx_plain);
-	if(ret == thrd_error) {
+	/* Initialize mutex */
+	rna_file->mutex_is_init = false;
+	if(mtx_init(&rna_file->mutex, mtx_plain) == thrd_error) {
 		rnaferrno_ = 2;
-		free(rna_file->carry);
-		gzclose(rna_file->file);
-		free(rna_file);
+		rnafclose((RnaFile)rna_file);
 		return NULL;
 	}
+	rna_file->mutex_is_init = true;
 
+	/* Determine type of compression, if any */
+	rna_file->compression = determine_compression(rna_file->file);
+
+	/* Set input and output buffers */
+	rna_file->in_buf  = s_malloc(RNAF_CHUNK * sizeof *rna_file->in_buf);
+	rna_file->out_buf = s_malloc(RNAF_CHUNK * sizeof *rna_file->out_buf);
+	rna_file->next = rna_file->out_buf;
+	rna_file->have = 0;
+
+	/* Initialize decompressor */
+	if(rna_file->compression != PLAIN) {
+#if defined _IGZIP_H
+		isal_inflate_init(&rna_file->stream);
+		rna_file->stream.crc_flag = rna_file->compression == GZIP ? ISAL_GZIP : ISAL_ZLIB;
+		rna_file->stream.next_in = rna_file->in_buf;
+#else
+		/* allocate inflate state */
+		int ret;
+		rna_file->stream.zalloc = Z_NULL;
+		rna_file->stream.zfree = Z_NULL;
+		rna_file->stream.opaque = Z_NULL;
+		rna_file->stream.avail_in = 0;
+		rna_file->stream.next_in = Z_NULL;
+		if(rna_file->compression == GZIP)
+			ret = inflateInit2(&rna_file->stream, 16 + MAX_WBITS);
+		else if(rna_file->compression == ZLIB)
+			ret = inflateInit(&rna_file->stream);
+		else {
+			rnaferrno_ = 1;
+			rnafclose((RnaFile)rna_file);
+		}
+		if(ret != Z_OK) {
+			rnaferrno_ = 1;
+			rnafclose((RnaFile)rna_file);
+		}
+		rna_file->stream.next_in = rna_file->in_buf;
+#endif
+	}
+
+	rna_file->type = 'b';
 	if(!extract_mode(rna_file, mode)) {
-		mtx_destroy(&rna_file->mutex);
-		gzclose(rna_file->file);
-		free(rna_file->carry);
-		free(rna_file);
+		rnafclose((RnaFile)rna_file);
 		return NULL;
 	}
 
@@ -67,19 +124,24 @@ rnafopen(const char *filename, const char *mode)
 void
 rnafclose(RnaFile file)
 {
-	if(file != NULL) {
-		rnaf_statep state = (rnaf_statep)file;
+	if(file == NULL)
+		return;
+	rnaf_statep state = (rnaf_statep)file;
+	if(fclose(state->file) == EOF)
+		rnaferrno_ = 1;
+	if(state->mutex_is_init)
 		mtx_destroy(&state->mutex);
-		gzclose(state->file);
-		free(state->carry);
-		free(state);
-	}
+	if(state->in_buf)
+		free(state->in_buf);
+	if(state->out_buf)
+		free(state->out_buf);
+	free(state);
 }
 
 bool
 rnafeof(RnaFile file)
 {
-	return (bool)gzeof(((rnaf_statep)file)->file);
+	return (bool)feof(((rnaf_statep)file)->file);
 }
 
 int
@@ -89,16 +151,17 @@ rnafgeterrno(void)
 }
 
 char *
-rnafstrerror(int rnaferrno_)
+rnafstrerror(int _rnaferrno)
 {
 	char *buffer = s_malloc(1000);
 
-	switch(rnaferrno_) {
+	switch(_rnaferrno) {
 	case 0: strncpy(buffer, "No error was encountered.", 1000); break;
 	case 1: strerror_r(errno, buffer, 1000); break;
 	case 2: strncpy(buffer, "Mutex failed to initialize.", 1000); break;
 	case 3: strncpy(buffer, "Invalid mode passsed.", 1000); break;
 	case 4: strncpy(buffer, "Read failed, could not determine type of file.", 1000); break;
+	case 5: strncpy(buffer, "Read failed, sequence is larger than input buffer.", 1000); break;
 	default: strncpy(buffer, "Unrecognized error message.", 1000); break;
 	}
 	return buffer;
@@ -108,67 +171,78 @@ rnafstrerror(int rnaferrno_)
 static bool
 extract_mode(rnaf_statep state, const char *mode)
 {
-	if(mode == NULL) {
+	if(mode == NULL)
 		return true;
-	}
 
+	bool type_set = false;
 	do {
 		switch(*mode++) {
-		case 'a': state->type = 'a'; /* fasta file */
-		case 'q': state->type = 'q'; /* fastq file */
-		case 's': state->type = 's'; /* sequences file */
+		case 'a': 
+			if(type_set) goto error;
+			state->type = 'a'; break; /* fasta file */
+		case 'q': 
+			if(type_set) goto error;
+			state->type = 'q'; break; /* fastq file */
+		case 's':
+			if(type_set) goto error;
+			state->type = 's'; break; /* sequences file */
+		case 'b':
+			if(type_set) goto error;
+			state->type = 'b'; break; /* binary file*/
 		case '\0': return true;
-		default: rnaferrno_ = 3; return false;
+		default: goto error;
 		}
 	} while(true);
-}
 
-/*==================================================================================================
-|                                        RNA File Functions                                        |
-==================================================================================================*/
-static size_t
-rnaf_fetch(rnaf_statep state)
-{
-	state->offset = 0;
-	state->have = gzread(state->file, state->carry, state->carry_size);
-	state->next = state->carry;
-	return state->have;
+error:
+	rnaferrno_ = 3;
+	return false;
 }
 
 /*==================================================================================================
 |                                        FASTQ File Parsing                                        |
 ==================================================================================================*/
 static size_t
-rnaf_qread(rnaf_statep state, unsigned char *buffer, size_t bufsize) // TODO: Replace offset with next & have
+rnaf_qread(rnaf_statep state, unsigned char *buffer, size_t bufsize)
 {
-	register size_t offset = state->offset;
-	register unsigned char *carry = state->carry;
-	bufsize = bufsize - 1; // so we can fit string terminator
+	/* Fill buffer with data, return 0 if nothing was filled */
+	size_t buffer_end;
+	if((buffer_end = rnaf_fill(state, buffer, bufsize)) == 0)
+		return 0;
 
-	memcpy(buffer, carry, offset);
-	size_t bytes_read = gzread(state->file, buffer+offset, bufsize-offset);
-	register size_t buffer_end = bytes_read + offset;
+	/* Trim sequence that was not fully read */
 	if(buffer_end == bufsize) {
 		register bool not_validated = true;
 		do {
+			/* If at fastq could not be validated, return error */
+			if(buffer_end == 0) {
+				rnaferrno_ = 5;
+				return 0;
+			}
+
+			/* Validate by searching for '@', which must be followed by a '+' */
 			while(--buffer_end && buffer[buffer_end] != '@');
 			register int validate = buffer_end, count = 0;
 			while(validate && count < 3) if(buffer[--validate] == '\n') count++;
 			if(++validate && buffer[validate] == '+') not_validated = false;
 		} while(not_validated);
-		offset = bufsize - buffer_end;
-		memcpy(carry, buffer+buffer_end, offset);
-		carry[offset] = 0;
-	} else {
-		offset = 0;
-		memset(carry, 0, state->carry_size);
-	}
-	state->offset = offset;
-	buffer[buffer_end] = 0;
 
+		/* Copy seq that wasn't fully read into internal buffer */
+		size_t offset = bufsize - buffer_end;
+		if(offset > RNAF_CHUNK) {
+			rnaferrno_ = 5;
+			return 0;
+		}
+		memcpy(state->out_buf, buffer+buffer_end, offset);
+		state->have = offset;
+		state->next = state->out_buf;
+	} else {
+		state->have = 0;
+		memset(state->out_buf, 0, RNAF_CHUNK);
+	}
+	buffer[buffer_end] = 0;
 	return buffer_end;
 }
-
 
 size_t
 rnafqread(RnaFile file, char *buffer, size_t bufsize)
@@ -176,10 +250,10 @@ rnafqread(RnaFile file, char *buffer, size_t bufsize)
 	rnaf_statep state = (rnaf_statep)file;
 
 	mtx_lock(&state->mutex);
-	size_t bytesread = rnaf_qread(state, (unsigned char *)buffer, bufsize);
+	size_t bytes_read = rnaf_qread(state, (unsigned char *)buffer, bufsize);
 	mtx_unlock(&state->mutex);
 
-	return bytesread;
+	return bytes_read;
 }
 
 size_t
@@ -188,31 +262,58 @@ rnafqread_unlocked(RnaFile file, char *buffer, size_t bufsize)
 	return rnaf_qread((rnaf_statep)file, (unsigned char *)buffer, bufsize);
 }
 
+static char *
+rnaf_qgets(rnaf_statep state, unsigned char *buffer, size_t bufsize)
+{
+	return NULL; // todo: implement qgets
+}
+
+char *
+rnafqgets(RnaFile file, char *buffer, size_t bufsize)
+{
+	rnaf_statep state = (rnaf_statep)file;
+
+	mtx_lock(&state->mutex);
+	char *ret = rnaf_qgets(state, (unsigned char *)buffer, bufsize);
+	mtx_unlock(&state->mutex);
+
+	return ret;
+}
+
+char *
+rnafqgets_unlocked(RnaFile file, char *buffer, size_t bufsize)
+{
+	return rnaf_qgets((rnaf_statep)file, (unsigned char *)buffer, bufsize);
+}
+
 /*==================================================================================================
 |                                        FASTA File Parsing                                        |
 ==================================================================================================*/
 static size_t
 rnaf_aread(rnaf_statep state, unsigned char *buffer, size_t bufsize)
 {
-	register size_t offset = state->offset;
-	register unsigned char *carry = state->carry;
-	bufsize = bufsize - 1;
+	/* Fill buffer with data */
+	size_t buffer_end;
+	if((buffer_end = rnaf_fill(state, buffer, --bufsize)) == 0)
+		return 0;
 
-	memcpy(buffer, carry, offset);
-	size_t bytes_read = gzread(state->file, buffer+offset, bufsize-offset);
-	register size_t buffer_end = bytes_read + offset;
+	/* Trim sequence that was not fully read */
 	if(buffer_end == bufsize) {
 		while(--buffer_end && buffer[buffer_end] != '>');
-		offset = bufsize - buffer_end;
-		memcpy(carry, buffer+buffer_end, offset);
-		carry[offset] = '\0';
+		size_t offset = bufsize - buffer_end;
+		if(offset > RNAF_CHUNK) {
+			rnaferrno_ = 5;
+			return 0;
+		}
+		memcpy(state->out_buf, buffer+buffer_end, offset);
+		state->next = state->out_buf;
+		state->have = offset;
 	} else {
-		offset = 0;
-		memset(carry, 0, state->carry_size);
+		state->have = 0;
+		memset(state->out_buf, 0, RNAF_CHUNK);
 	}
-	state->offset = offset;
-	buffer[buffer_end] = '\0';
 
+	buffer[buffer_end] = 0;
 	return buffer_end;
 }
 
@@ -264,7 +365,7 @@ rnaf_skipaheader(rnaf_statep state)
 			} else {
 				if(!rnaf_fetch(state))
 					return NULL;
-				rd = start = state->carry;
+				rd = start = state->out_buf;
 				n = state->have;
 			}
 		} while(!newline);
@@ -276,7 +377,7 @@ rnaf_skipaheader(rnaf_statep state)
 }
 
 static char *
-rnaf_agets(rnaf_statep state, unsigned char *buffer, size_t bufsize)
+rnaf_agets(rnaf_statep state, unsigned char *buffer, size_t bufsize)\
 {
 	/* Skip header information, in other words find the start of next sequence */
 	if(rnaf_skipaheader(state) == NULL)
@@ -289,13 +390,13 @@ rnaf_agets(rnaf_statep state, unsigned char *buffer, size_t bufsize)
 
 	/* Fill buffer with seq */
 	if(left) do {
-		if(state->have == 0 && !rnaf_fetch(state))
-			break;
-		if(*state->next == '>')
+		if(state->have == 0 && rnaf_fetch(state) != 0)
+			return NULL; // error in rnaf_fetch
+		if(state->have == 0 || *state->next == '>')
 			break;
 		
 		/* Look for end of line in internal buffer */
-		n = state->have > left ? left : state->have;
+		n = MIN2(state->have, left);
 		eos = (unsigned char *)memchr(state->next, '\n', n);
 		if(eos != NULL)
 			n = (size_t)(eos - state->next);
@@ -333,32 +434,34 @@ rnafagets_unlocked(RnaFile file, char *buffer, size_t bufsize)
 {
 	return rnaf_agets((rnaf_statep)file, (unsigned char *)buffer, bufsize);
 }
-
 /*==================================================================================================
 |                                        READS File Parsing                                        |
 ==================================================================================================*/
 static size_t
 rnaf_sread(rnaf_statep state, unsigned char *buffer, size_t bufsize)
 {
-	register size_t offset = state->offset;
-	register unsigned char *carry = state->carry;
-	bufsize = bufsize - 1;
+	/* Fill buffer, leave space for null terminator */
+	register size_t buffer_end;
+	if((buffer_end = rnaf_fill(state, buffer, --bufsize)) == 0)
+		return 0;
 
-	memcpy(buffer, carry, offset);
-	size_t bytes_read = gzread(state->file, buffer+offset, bufsize-offset);
-	register size_t buffer_end = bytes_read + offset;
+	/* Trim sequence that was not fully read */
 	if(buffer_end == bufsize) {
 		while(--buffer_end && buffer[buffer_end] != '\n');
-		offset = bufsize - buffer_end;
-		memcpy(carry, buffer+buffer_end, offset);
-		carry[offset] = 0;
+		size_t offset = bufsize - ++buffer_end; // increase to include \n
+		if(offset > RNAF_CHUNK) {
+			rnaferrno_ = 5;
+			return 0;
+		}
+		memcpy(state->out_buf, buffer+buffer_end, offset);
+		state->have = offset;
+		state->next = state->out_buf;
 	} else {
-		offset = 0;
-		memset(carry, 0, state->carry_size);
+		state->have = 0;
+		memset(state->out_buf, 0, RNAF_CHUNK);
 	}
-	state->offset = offset;
-	buffer[buffer_end] = '\0';
 
+	buffer[buffer_end] = '\0';
 	return buffer_end;
 }
 
@@ -386,7 +489,7 @@ rnaf_sgets(rnaf_statep state, unsigned char *buffer, size_t bufsize)
 	/* Sanity checks */
 	if(state == NULL || buffer == NULL || bufsize == 0)
 		return NULL;
-	if(gzeof(state->file))
+	if(feof(state->file))
 		return NULL;
 
 	/* Declare variables */
@@ -396,14 +499,16 @@ rnaf_sgets(rnaf_statep state, unsigned char *buffer, size_t bufsize)
 
 	/* Begin filling buffer */
 	if(left) do {
-		if(state->have == 0 && !rnaf_fetch(state))
+		if(state->have == 0 && rnaf_fetch(state) != 0)
+			return NULL; // fetch encountered error
+		if(state->have == 0)
 			break;
-		
-		n = state->have > left ? left : state->have;
+
+		n = MIN2(state->have, left);
 		eos = (unsigned char *)memchr(state->next, '\n', n);
 		if(eos != NULL)
 			n = (size_t)(eos - state->next);
-		
+
 		/* Copy sequence excluding newline */
 		memcpy(buffer, state->next, n);
 		left -= n;
@@ -441,12 +546,52 @@ rnafsgets_unlocked(RnaFile file, char *buffer, size_t bufsize)
 |                                       General File Parsing                                       |
 ==================================================================================================*/
 static size_t
+rnaf_fill(rnaf_statep state, unsigned char *buffer, size_t bufsize)
+{
+	if(bufsize == (size_t)0)
+		return (size_t)0;
+
+	/* Declare variables */
+	register size_t left = bufsize; // decrement bufsize to guarantee fitting null terminator
+
+	/* Fill buffer with decompressed bytes */
+	if(state->have) {
+		size_t n = MIN2(left, state->have);
+		memcpy(buffer, state->out_buf, n);
+
+		/* Move pointers */
+		buffer += n;
+		state->next += n;
+		state->have -= n;
+		left -= n;
+	}
+
+	/* Fill buffer with decompressed data */
+	size_t got = 0;
+	if(rnaf_load(state, buffer, left, &got) != 0)
+		return 0;
+	left -= got;
+
+	return bufsize - left;
+}
+
+static size_t
 rnaf_read(rnaf_statep state, unsigned char *buffer, size_t bufsize)
 {
 	switch(state->type) {
-	case 'a': return rnaf_aread(state, buffer, bufsize); break;
-	case 'q': return rnaf_qread(state, buffer, bufsize); break;
-	case 's': return rnaf_sread(state, buffer, bufsize); break;
+	case 'a': return rnaf_aread(state, buffer, bufsize);
+	case 'q': return rnaf_qread(state, buffer, bufsize);
+	case 's': return rnaf_sread(state, buffer, bufsize);
+	case 'b': {
+		/* If there are bytes in internal buffer, use fill */
+		if(state->have)
+			return rnaf_fill(state, buffer, bufsize);
+		/* Otherwise, load directly into buffer */
+		size_t bytes_read;
+		if(rnaf_load(state, buffer, bufsize, &bytes_read) != 0)
+			return 0;
+		return bytes_read;
+	}
 	default: 
 		rnaferrno_ = 4;
 		return 0;
@@ -458,9 +603,8 @@ rnafread(RnaFile file, char *buffer, size_t bufsize)
 {
 	rnaf_statep state = (rnaf_statep)file;
 
-	size_t bytes_read;
 	mtx_lock(&state->mutex);
-	bytes_read = rnaf_read(state, (unsigned char *)buffer, bufsize);
+	size_t bytes_read = rnaf_read(state, (unsigned char *)buffer, bufsize);
 	mtx_unlock(&state->mutex);
 
 	return bytes_read;
@@ -473,17 +617,55 @@ rnafread_unlocked(RnaFile file, char *buffer, size_t bufsize)
 }
 
 static char *
+rnaf_line(rnaf_statep state, unsigned char *buffer, size_t bufsize)
+{
+	/* Sanity checks */
+	if(state == NULL || buffer == NULL || bufsize == 0)
+		return NULL;
+	if(feof(state->file))
+		return NULL;
+
+	/* Declare variables */
+	register size_t n, left = bufsize - 1;
+	register unsigned char *str = buffer;
+	register unsigned char *eol;
+
+	/* Begin filling buffer */
+	if(left) do {
+		if(state->have == 0 && rnaf_fetch(state) != 0)
+			return NULL; // fetch encountered error
+		if(state->have == 0)
+			break;
+
+		n = MIN2(state->have, left);
+		eol = (unsigned char *)memchr(state->next, '\n', n);
+		if(eol != NULL)
+			n = (size_t)(eol - state->next) + 1;
+
+		/* Copy line into buffer */
+		memcpy(buffer, state->next, n);
+		left -= n;
+		buffer += n;
+		state->have -= n;
+		state->next += n;
+	} while(left && eol == NULL);
+	if(str == buffer) /* Nothing was written, return NULL */
+		return NULL;
+	buffer[0] = '\0';
+	return (char *)str;
+}
+
+static char *
 rnaf_gets(rnaf_statep state, unsigned char *buffer, size_t bufsize)
 {
 	switch(state->type) {
 	case 'a': return rnaf_agets(state, buffer, bufsize);
+	case 'q': return rnaf_qgets(state, buffer, bufsize);
 	case 's': return rnaf_sgets(state, buffer, bufsize);
-	case 'q': // todo: implement fastq
-		warning_message("rnafgets: fastq not implemented yet.");
-		return 0;
+	case 'b': return rnaf_line(state, buffer, bufsize);
 	default:
-		rnaferrno_ = 4;
-		return 0;
+		rnaferrno_ = 5;
+		return NULL;
 	}
 }
 
@@ -493,7 +675,7 @@ rnafgets(RnaFile file, char *buffer, size_t bufsize)
 	rnaf_statep state = (rnaf_statep)file;
 
 	mtx_lock(&state->mutex);
-	char * ret = rnaf_gets(state, (unsigned char *)buffer, bufsize);
+	char *ret = rnaf_gets(state, (unsigned char *)buffer, bufsize);
 	mtx_unlock(&state->mutex);
 
 	return ret;
@@ -503,4 +685,94 @@ char *
 rnafgets_unlocked(RnaFile file, char *buffer, size_t bufsize)
 {
 	return rnaf_gets((rnaf_statep)file, (unsigned char *)buffer, bufsize);
+}
+/*==================================================================================================
+|                                         Helper Functions                                         |
+==================================================================================================*/
+static int
+rnaf_fetch(rnaf_statep state)
+{
+	if(rnaf_load(state, state->out_buf, RNAF_CHUNK, &state->have) != 0)
+		return 1;
+	state->next = state->out_buf;
+	return 0;
+}
+
+static int
+rnaf_load(rnaf_statep state, unsigned char *buffer, size_t bufsize, size_t *read)
+{
+	/* Process plain file */
+	if(state->compression == PLAIN) {
+		*read = fread(buffer, 1, bufsize, state->file);
+		if(*read == 0 && ferror(state->file)) {
+			rnaferrno_ = 1;
+			return 1;
+		}
+		return 0;
+	}
+
+	/* Process compressed file */
+	register int ret;
+	register size_t left = bufsize;
+	state->stream.next_out = buffer;
+	state->stream.avail_out = bufsize;
+
+	if(left) do {
+		/* Refill input buffer if empty */
+		if(state->stream.avail_in == 0) {
+			state->stream.avail_in = fread(state->in_buf, 1, RNAF_CHUNK, state->file);
+			if(ferror(state->file)) {
+				rnaferrno_ = 1;
+				return 1;
+			}
+			if(state->stream.avail_in == 0)
+				break;
+			state->stream.next_in = state->in_buf;
+		}
+#if defined _IGZIP_H
+		ret = isal_inflate(&state->stream);
+		if(ret != ISAL_DECOMP_OK && ret != ISAL_END_INPUT)
+			return 2;
+		left = state->stream.avail_out;
+	} while(left && ret != ISAL_END_INPUT);
+#else
+		ret = inflate(&state->stream, Z_NO_FLUSH);
+		if(ret != Z_BUF_ERROR && ret != Z_OK && ret != Z_STREAM_END) {
+			rnaferrno_ = 1;
+			return 2;
+		}
+		left = state->stream.avail_out;
+	} while(left && ret != Z_STREAM_END);
+#endif
+	*read = bufsize - left;
+
+	return 0;
+}
+
+static COMPRESSION_TYPE
+determine_compression(FILE *fp)
+{
+    unsigned char buffer[2];
+
+    /* Read the first two bytes of a buffer */
+    if (fread(buffer, 1, 2, fp) != 2) {
+        return PLAIN; // Could not read two bytes, assume PLAIN
+    }
+
+    /* Rewind the file pointer to the beginning */
+    fseek(fp, 0, SEEK_SET);
+
+    /* Check for GZIP signature */
+    if (buffer[0] == 0x1F && buffer[1] == 0x8B) {
+        return GZIP;
+    }
+
+    /* Check for ZLIB signature */
+    if (buffer[0] == 0x78 && (buffer[1] == 0x01 || buffer[1] == 0x5E ||
+	    buffer[1] == 0x9C || buffer[1] == 0xDA)) {
+        return ZLIB;
+    }
+
+    /* If not GZIP or ZLIB, we assume PLAIN file */
+    return PLAIN;
 }

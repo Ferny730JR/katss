@@ -31,7 +31,8 @@ typedef struct RnaFile *RnaFile;
 
 /**
  * @brief Open an fasta/fastq/sequence files fo reading. Mode is used to specify which type
- * of file is used for reading. "a" for fasta, "q" for fastq, "s" for sequence file.
+ * of file is used for reading. "a" for fasta, "q" for fastq, "s" for sequence file, and
+ * "b" for binary.
  * 
  * @param filename Path to the file you want to open for reading
  * @param mode Type of file being opened
@@ -41,7 +42,9 @@ RnaFile rnafopen(const char *filename, const char *mode);
 
 
 /**
- * @brief Close a RnaFile struct. Removes all allocated resources to the RnaFile.
+ * @brief Close an RnaFile handle.
+ * 
+ * Removes all allocated resources associated with RnaFile.
  * 
  * @param file RnaFile to close
  */
@@ -67,7 +70,7 @@ bool rnafeof(RnaFile file);
  * @note It is necessary to free the string returned from this function as memory is
  * allocated to store the string.
  */
-char *rnafstrerror(int rnaferrno_);
+char *rnafstrerror(int _rnaferrno);
 
 
 /**
