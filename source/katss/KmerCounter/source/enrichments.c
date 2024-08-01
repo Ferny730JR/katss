@@ -92,11 +92,11 @@ katss_compute_prob_enrichments(KatssCounter *test, KatssCounter *mono,
 		katss_unhash(kseq, i, test->kmer, true);
 
 		/* Get frequencies */
-		uint64_t test_cnt;
-		katss_get_from_hash(test, KATSS_DOUBLE, &test_cnt, i);
+		double test_frq, ctrl_frq;
+		katss_get_from_hash(test, KATSS_DOUBLE, &test_frq, i);
 
-		double test_frq = test_cnt / test->total;
-		double ctrl_frq = predict_kmer(kseq, mono, dint);
+		test_frq = test_frq / test->total;
+		ctrl_frq = predict_kmer(kseq, mono, dint);
 
 		enrichments->enrichments[i].key = i; // Set key
 		if(test_frq == 0.0 || ctrl_frq == 0.0) { // Determine if enrichment is valid
