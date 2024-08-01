@@ -1,4 +1,3 @@
-#include <zlib.h>
 #include <stdbool.h>
 #include <errno.h>
 #include <string.h>
@@ -101,6 +100,7 @@ katss_count_kmers_mt(const char *filename, unsigned int kmer, int threads)
 
 	/* Free resources */
 	rnafclose(file);
+	free(jobs);
 	free(jobarg);
 
 	return counter;
@@ -110,23 +110,20 @@ katss_count_kmers_mt(const char *filename, unsigned int kmer, int threads)
 static KatssCounter *
 count_file(const char *filename, unsigned int kmer, const char filetype)
 {
+	KatssCounter *counter = NULL;
+
 	/* Open file and prepare counter & hasher */
-	gzFile read_file = gzopen(filename, "r");
+	RnaFile read_file = rnafopen(filename, "b");
 	if(read_file == NULL)
-		return NULL;
+		goto exit;
 
 	KatssHasher *hasher = katss_init_hasher(kmer, filetype);
-	if(hasher == NULL) {
-		gzclose(read_file);
-		return NULL;
-	}
+	if(hasher == NULL)
+		goto cleanup_file;
 
-	KatssCounter *counter = katss_init_counter(kmer);
-	if(counter == NULL) {
-		gzclose(read_file);
-		free(hasher);
-		return NULL;
-	}
+	counter = katss_init_counter(kmer);
+	if(counter == NULL)
+		goto cleanup_hasher;
 
 	/* Prepare file reading & hash int */
 	char buffer[BUFFER_SIZE+1] = { 0 };
@@ -134,7 +131,7 @@ count_file(const char *filename, unsigned int kmer, const char filetype)
 	uint32_t hash_value;
 
 	do {
-		still_reading = gzread(read_file, buffer, BUFFER_SIZE);
+		still_reading = rnafread_unlocked(read_file, buffer, BUFFER_SIZE);
 		buffer[still_reading] = '\0';
 
 		katss_set_seq(hasher, buffer, filetype);
@@ -142,9 +139,21 @@ count_file(const char *filename, unsigned int kmer, const char filetype)
 			katss_increment(counter, hash_value);
 		}
 	} while(still_reading == BUFFER_SIZE);
-	gzclose(read_file);
-	free(hasher);
 
+	/* If error was encountered while, reading report and return NULL */
+	if(still_reading == 0 || rnaferrno) {
+		katss_free_counter(counter);
+		counter = NULL;
+		char *err = rnafstrerror(rnaferrno);
+		error_message("katss: %d: %s", rnaferrno, err);
+		free(err);
+	}
+
+cleanup_hasher:
+	free(hasher);
+cleanup_file:
+	rnafclose(read_file);
+exit:
 	return counter;
 }
 
@@ -167,8 +176,8 @@ count_file_mt(void *arg)
 	/* Begin counting */
 	while(rnafread(args->rnafile, buffer, BUFFER_SIZE)) {
 		katss_set_seq(hasher, buffer, args->filetype);
-		while(katss_get_fh(hasher, &hash_values[cur_hash++], args->filetype)) {
-			if(cur_hash == num_counts) { // begin flushing
+		while(katss_get_fh(hasher, &hash_values[cur_hash], args->filetype)) {
+			if(++cur_hash == num_counts) { // begin flushing
 				katss_increments(args->counter, hash_values, cur_hash);
 				cur_hash = 0;
 			}
@@ -191,20 +200,21 @@ count_file_mt(void *arg)
 static char
 determine_filetype(const char *file)
 {
-	/* Open the gzFile, return 'e' upon error */
-	gzFile reads_file = gzopen(file, "r");
+	/* Open the RnaFile, return 'e' upon error */
+	RnaFile reads_file = rnafopen(file, "b");
 	if(reads_file == NULL) {
 		error_message("katss: %s: %s", file, strerror(errno));
-		gzclose(reads_file);
+		rnafclose(reads_file);
 		return 'N';
 	}
 
 	char buffer[BUFFER_SIZE];
 	int lines_read = 0;
 	int fastq_score_lines = 0;
+	int fasta_score_lines = 0;
 	int sequence_lines = 0;
 
-	while (gzgets(reads_file, buffer, BUFFER_SIZE) != NULL && lines_read < 10) {
+	while (rnafgets(reads_file, buffer, BUFFER_SIZE) != NULL && lines_read < 10) {
 		lines_read++;
 		char first_char = buffer[0];
 
@@ -217,9 +227,10 @@ determine_filetype(const char *file)
 			fastq_score_lines++;
 
 		/* Check if the line starts with '>' or ';' for FASTA */
+		/* TODO: fastq can potentially have a '>' or ';' in its quality score,
+		meaning that file can be incorrectly guessed as fasta when it is fastq */
 		} else if (first_char == '>' || first_char == ';') {
-			gzclose(reads_file);
-			return 'a';
+			fasta_score_lines++;
 		} else {
 			// Check for nucleotide characters
 			int num_total = 0, num = 0;
@@ -234,11 +245,12 @@ determine_filetype(const char *file)
 			}
 		}
 	}
-
-    gzclose(reads_file);
+    rnafclose(reads_file);
 
     if (fastq_score_lines >= 2) {
         return 'q'; // fastq file
+	} else if (fasta_score_lines > 0) {
+		return 'a';
     } else if (sequence_lines == 10) {
         return 'r'; // raw sequences file
     } else {

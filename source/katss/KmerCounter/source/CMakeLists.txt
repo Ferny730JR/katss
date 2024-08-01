@@ -25,12 +25,10 @@ endif()
 target_link_libraries(OBJLIB PRIVATE tinycthread KATSS_MEMORYUTILS KATSS_RNAFILES)
 target_include_directories(OBJLIB PRIVATE ${KKCTR_INCLUDE_DIR})
 
-# Create shared and static library
-#add_library(kkctr_shared SHARED $<TARGET_OBJECTS:OBJLIB>)
+# Create static library
 add_library(kkctr_static STATIC $<TARGET_OBJECTS:OBJLIB>)
 
 if(ipo_is_supported)
-	#set_property(TARGET kkctr_shared PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
 	set_property(TARGET kkctr_static PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
 endif()
 
@@ -43,8 +41,7 @@ endif()
 
 #target_link_libraries(kkctr_shared # RNAFILES links tinycthread
 #	ZLIB::ZLIB KATSS_MEMORYUTILS KATSS_RNAFILES ${EXTRA_LIBS})
-target_link_libraries(kkctr_static
-	ZLIB::ZLIB KATSS_MEMORYUTILS KATSS_RNAFILES ${EXTRA_LIBS})
+target_link_libraries(kkctr_static KATSS_MEMORYUTILS KATSS_RNAFILES ${EXTRA_LIBS})
 
 # Set public include directory
 #target_include_directories(kkctr_shared PUBLIC ${KKCTR_INCLUDE_DIR})

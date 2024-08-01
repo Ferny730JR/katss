@@ -1,4 +1,3 @@
-#include <zlib.h>
 #include <stdbool.h>
 #include <errno.h>
 #include <string.h>
@@ -412,11 +411,11 @@ decrement_kmer(KatssCounter *counter, const char *sequence, const char *pat, int
 static char
 determine_filetype(const char *file)
 {
-	/* Open the gzFile, return 'N' upon error */
-	gzFile reads_file = gzopen(file, "r");
+	/* Open the rnafFile, return 'N' upon error */
+	RnaFile reads_file = rnafopen(file, "b");
 	if(reads_file == NULL) {
 		error_message("katss: %s: %s", file, strerror(errno));
-		gzclose(reads_file);
+		rnafclose(reads_file);
 		return 'N';
 	}
 
@@ -425,7 +424,7 @@ determine_filetype(const char *file)
 	int fastq_score_lines = 0;
 	int sequence_lines = 0;
 
-	while (gzgets(reads_file, buffer, BUFFER_SIZE) != NULL && lines_read < 10) {
+	while (rnafgets(reads_file, buffer, BUFFER_SIZE) != NULL && lines_read < 10) {
 		lines_read++;
 		char first_char = buffer[0];
 
@@ -439,7 +438,7 @@ determine_filetype(const char *file)
 
 		/* Check if the line starts with '>' or ';' for FASTA */
 		} else if (first_char == '>' || first_char == ';') {
-			gzclose(reads_file);
+			rnafclose(reads_file);
 			return 'a';
 		} else {
 			// Check for nucleotide characters
@@ -456,7 +455,7 @@ determine_filetype(const char *file)
 		}
 	}
 
-    gzclose(reads_file);
+    rnafclose(reads_file);
 
     if (fastq_score_lines >= 2) {
         return 'q'; // fastq file
