@@ -2,7 +2,6 @@
 #define KATSS_RNAFILES_H
 
 #include <stdbool.h>
-#include "tinycthread.h"
 
 #ifdef __cplusplus
 extern "C" {
