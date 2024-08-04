@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
 #include <errno.h>
@@ -9,11 +10,16 @@
 #  include <zlib.h>
 #endif
 
+#if (__STDC_NO_THREADS__)
+#  include "tinycthread.h"
+#else
+#  include <threads.h>
+#endif
+
 #include "rnafiles.h"
-#include "tinycthread.h" // for mutex
-#include "memory_utils.h"
 
 #define RNAF_CHUNK 16384
+#define MIN2(A, B)      ((A) < (B) ? (A) : (B))
 
 static _Thread_local int rnaferrno_;
 
@@ -31,6 +37,7 @@ struct rnaf_state {
 	struct inflate_state stream;   /** Decompressor */
 #else
 	z_stream stream;
+	bool stream_is_init;
 #endif
 
 	unsigned char *in_buf;         /** Input buffer*/
@@ -49,38 +56,65 @@ static int rnaf_fetch(rnaf_statep state);
 static int rnaf_load(rnaf_statep state, unsigned char *buffer, size_t bufsize, size_t *read);
 static size_t rnaf_fill(rnaf_statep state, unsigned char *buffer, size_t bufsize);
 
+static void
+init_rnafstatep(rnaf_statep state)
+{
+	state->file = NULL;
+	state->compression = PLAIN;
+	state->type = 'b';
+#ifndef _IGZIP_H
+	state->stream_is_init = false;
+#endif
+	state->in_buf = NULL;
+	state->out_buf = NULL;
+	state->next = NULL;
+	state->have = 0;
+	state->mutex_is_init = false;
+}
+
+static void *
+error_rnafopen(rnaf_statep state, int _rnaferrno)
+{
+	rnaferrno_ = _rnaferrno;
+	rnafclose((RnaFile)state);
+	return NULL;
+}
+
 RnaFile
 rnafopen(const char *filename, const char *mode)
 {
 	rnaferrno_ = 0; // no error encountered. yet.
 
-	rnaf_statep rna_file = s_malloc(sizeof *rna_file); // initialize rna_file
+	/* Initialize RnaFile */
+	rnaf_statep rna_file = malloc(sizeof *rna_file);
+	if(rna_file == NULL)
+		return error_rnafopen(rna_file, 6);
+
+	/* Init deafult values */
+	init_rnafstatep(rna_file);
 
 	/* Open file and check for errors */
 	rna_file->file = fopen(filename, "r");
-	if(rna_file->file == NULL) {
-		rnaferrno_ = 1;
-		free(rna_file);
-		return NULL;
-	}
+	if(rna_file->file == NULL)
+		return error_rnafopen(rna_file, 1);
 
 	/* Initialize mutex */
 	rna_file->mutex_is_init = false;
-	if(mtx_init(&rna_file->mutex, mtx_plain) == thrd_error) {
-		rnaferrno_ = 2;
-		rnafclose((RnaFile)rna_file);
-		return NULL;
-	}
+	if(mtx_init(&rna_file->mutex, mtx_plain) != thrd_success) 
+		return error_rnafopen(rna_file, 2);
 	rna_file->mutex_is_init = true;
 
 	/* Determine type of compression, if any */
 	rna_file->compression = determine_compression(rna_file->file);
 
 	/* Set input and output buffers */
-	rna_file->in_buf  = s_malloc(RNAF_CHUNK * sizeof *rna_file->in_buf);
-	rna_file->out_buf = s_malloc(RNAF_CHUNK * sizeof *rna_file->out_buf);
+	rna_file->in_buf = malloc(RNAF_CHUNK * sizeof *rna_file->in_buf);
+	if(rna_file->in_buf == NULL)
+		return error_rnafopen(rna_file, 6);
+	rna_file->out_buf = malloc(RNAF_CHUNK * sizeof *rna_file->out_buf);
+	if(rna_file->out_buf == NULL)
+		return error_rnafopen(rna_file, 6);
 	rna_file->next = rna_file->out_buf;
-	rna_file->have = 0;
 
 	/* Initialize decompressor */
 	if(rna_file->compression != PLAIN) {
@@ -104,19 +138,15 @@ rnafopen(const char *filename, const char *mode)
 			rnaferrno_ = 1;
 			rnafclose((RnaFile)rna_file);
 		}
-		if(ret != Z_OK) {
-			rnaferrno_ = 1;
-			rnafclose((RnaFile)rna_file);
-		}
+		if(ret != Z_OK)
+			return error_rnafopen(rna_file, 1);
 		rna_file->stream.next_in = rna_file->in_buf;
+		rna_file->stream_is_init = true;
 #endif
 	}
 
-	rna_file->type = 'b';
-	if(!extract_mode(rna_file, mode)) {
-		rnafclose((RnaFile)rna_file);
-		return NULL;
-	}
+	if(!extract_mode(rna_file, mode))
+		return error_rnafopen(rna_file, 3);
 
 	return (RnaFile)rna_file;
 }
@@ -127,7 +157,7 @@ rnafclose(RnaFile file)
 	if(file == NULL)
 		return;
 	rnaf_statep state = (rnaf_statep)file;
-	if(fclose(state->file) == EOF)
+	if(state->file != NULL && fclose(state->file) == EOF)
 		rnaferrno_ = 1;
 	if(state->mutex_is_init)
 		mtx_destroy(&state->mutex);
@@ -135,6 +165,10 @@ rnafclose(RnaFile file)
 		free(state->in_buf);
 	if(state->out_buf)
 		free(state->out_buf);
+#ifndef _IGZIP_H
+	if(state->stream_is_init)
+		inflateEnd(&state->stream);
+#endif
 	free(state);
 }
 
@@ -153,7 +187,11 @@ rnafgeterrno(void)
 char *
 rnafstrerror(int _rnaferrno)
 {
-	char *buffer = s_malloc(1000);
+	char *buffer = malloc(1000);
+	if(buffer == NULL) {
+		rnaferrno_ = 6;
+		return NULL;
+	}
 
 	switch(_rnaferrno) {
 	case 0: strncpy(buffer, "No error was encountered.", 1000); break;
@@ -162,6 +200,7 @@ rnafstrerror(int _rnaferrno)
 	case 3: strncpy(buffer, "Invalid mode passsed.", 1000); break;
 	case 4: strncpy(buffer, "Read failed, could not determine type of file.", 1000); break;
 	case 5: strncpy(buffer, "Read failed, sequence is larger than input buffer.", 1000); break;
+	case 6: strncpy(buffer, "Out of memory.", 1000); break;
 	default: strncpy(buffer, "Unrecognized error message.", 1000); break;
 	}
 	return buffer;
@@ -178,25 +217,21 @@ extract_mode(rnaf_statep state, const char *mode)
 	do {
 		switch(*mode++) {
 		case 'a': 
-			if(type_set) goto error;
+			if(type_set) return false;
 			state->type = 'a'; break; /* fasta file */
 		case 'q': 
-			if(type_set) goto error;
+			if(type_set) return false;
 			state->type = 'q'; break; /* fastq file */
 		case 's':
-			if(type_set) goto error;
+			if(type_set) return false;
 			state->type = 's'; break; /* sequences file */
 		case 'b':
-			if(type_set) goto error;
+			if(type_set) return false;
 			state->type = 'b'; break; /* binary file*/
 		case '\0': return true;
-		default: goto error;
+		default: return false;
 		}
 	} while(true);
-
-error:
-	rnaferrno_ = 3;
-	return false;
 }
 
 /*==================================================================================================
