@@ -3,6 +3,8 @@ set(TINYCTHREAD_DISABLE_TESTS ON CACHE BOOL "Disable TinyCThread unit tests")
 set(TINYCTHREAD_INSTALL OFF CACHE BOOL "Install a static library for TinyCThread")
 
 # Build dependencies first, then katss, lastly binaries
-add_subdirectory(tinycthread)
+if(NOT HAVE_C11_THREADS)
+	add_subdirectory(tinycthread)
+endif()
 add_subdirectory(katss)
 add_subdirectory(bin)
