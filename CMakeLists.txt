@@ -4,8 +4,16 @@ project(KATSS
 	DESCRIPTION "K-mer counting function utilities."
 	LANGUAGES C)
 
-set(CMAKE_C_STANDARD 17)
-set(CMAKE_C_STANDARD_REQUIRED TRUE)
+set(CMAKE_C_STANDARD 11)
+include(CheckIncludeFile)
+CHECK_INCLUDE_FILE(threads.h HAVE_C11_THREADS)
+if(NOT HAVE_C11_THREADS)
+	set(THREAD_LIB tinycthread)
+else()
+	find_package(Threads REQUIRED)
+	set(THREAD_LIB Threads::Threads)
+endif()
+
 
 include(CheckIPOSupported)
 check_ipo_supported(RESULT ipo_is_supported OUTPUT ipo_error)
