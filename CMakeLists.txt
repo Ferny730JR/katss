@@ -1,10 +1,11 @@
-cmake_minimum_required(VERSION 3.9.0) # for IPO
+cmake_minimum_required(VERSION 3.9.0) # 3.9 for IPO
 project(KATSS
 	VERSION 0.9.0
 	DESCRIPTION "K-mer counting function utilities."
 	LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
+
 include(CheckIncludeFile)
 CHECK_INCLUDE_FILE(threads.h HAVE_C11_THREADS)
 if(NOT HAVE_C11_THREADS)
@@ -13,7 +14,6 @@ else()
 	find_package(Threads REQUIRED)
 	set(THREAD_LIB Threads::Threads)
 endif()
-
 
 include(CheckIPOSupported)
 check_ipo_supported(RESULT ipo_is_supported OUTPUT ipo_error)
@@ -50,10 +50,10 @@ find_path(COMPRESSION_INC
 		  "/usr/local/include")
 if(COMPRESSION_LIB)
 	set(KATSS_HAS_ISA_L TRUE)
-	message("-- Found ISA-L: " ${COMPRESSION_LIB})
+	message(STATUS "Found ISA-L: " ${COMPRESSION_LIB})
 else()
 	set(KATSS_HAS_ISA_L FALSE)
-	message("-- ISA-L not found - attempting zlib...")
+	message(STATUS "ISA-L not found - attempting ZLIB...")
 	find_package(ZLIB REQUIRED)
 	set(COMPRESSION_LIB ZLIB::ZLIB)
 	set(COMPRESSION_INC "")

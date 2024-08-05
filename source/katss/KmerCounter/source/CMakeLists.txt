@@ -41,7 +41,7 @@ endif()
 
 #target_link_libraries(kkctr_shared # RNAFILES links tinycthread
 #	ZLIB::ZLIB KATSS_MEMORYUTILS KATSS_RNAFILES ${EXTRA_LIBS})
-target_link_libraries(kkctr_static KATSS_MEMORYUTILS KATSS_RNAFILES ${EXTRA_LIBS})
+target_link_libraries(kkctr_static PRIVATE KATSS_MEMORYUTILS KATSS_RNAFILES ${THREAD_LIB} ${EXTRA_LIBS})
 
 # Set public include directory
 #target_include_directories(kkctr_shared PUBLIC ${KKCTR_INCLUDE_DIR})
