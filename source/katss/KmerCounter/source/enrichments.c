@@ -177,8 +177,8 @@ katss_ikke(const char *test_file, const char *control_file, unsigned int kmer, u
 	for(uint64_t i=1; i<iterations; i++) {
 		char kseq[17];
 		katss_unhash(kseq, enrichments->enrichments[i-1].key, test_counts->kmer, true);
-		katss_uncount_kmer(test_counts, test_file, kseq);
-		katss_uncount_kmer(control_counts, control_file, kseq);
+		katss_recount_kmer(test_counts, test_file, kseq);
+		katss_recount_kmer(control_counts, control_file, kseq);
 		enrichments->enrichments[i] = katss_top_enrichment(test_counts, control_counts, normalize);
 	}
 
@@ -195,12 +195,12 @@ katss_ikke_mt(const char *test_file, const char *control_file, unsigned int kmer
               uint64_t iterations, bool normalize, int threads)
 {
 	/* Get the counts for the test_file */
-	KatssCounter *test_counts = katss_count_kmers(test_file, kmer);
+	KatssCounter *test_counts = katss_count_kmers_mt(test_file, kmer, threads);
 	if(test_counts == NULL)
 		return NULL;
 
 	/* Get the counts for the control file */
-	KatssCounter *control_counts = katss_count_kmers(control_file, kmer);
+	KatssCounter *control_counts = katss_count_kmers_mt(control_file, kmer, threads);
 	if(control_counts == NULL) {
 		katss_free_counter(test_counts);
 		return NULL;
@@ -219,8 +219,8 @@ katss_ikke_mt(const char *test_file, const char *control_file, unsigned int kmer
 	for(uint32_t i=1; i<iterations; i++) {
 		char kseq[17];
 		katss_unhash(kseq, enrichments->enrichments[i-1].key, test_counts->kmer, true);
-		katss_uncount_kmer_mt(test_counts, test_file, kseq, threads);
-		katss_uncount_kmer_mt(control_counts, control_file, kseq, threads);
+		katss_recount_kmer_mt(test_counts, test_file, kseq, threads);
+		katss_recount_kmer_mt(control_counts, control_file, kseq, threads);
 		enrichments->enrichments[i] = katss_top_enrichment(test_counts, control_counts, normalize);
 	}
 
@@ -264,9 +264,9 @@ katss_prob_ikke(const char *test_file, unsigned int kmer, uint64_t iterations, b
 	char kseq[17];
 	for(uint64_t i=1; i<enrichments->num_enrichments; i++) {
 		katss_unhash(kseq, enrichments->enrichments[i-1].key, kmer, true);
-		katss_uncount_kmer(test_counts, test_file, kseq);
-		katss_uncount_kmer(mono_counts, test_file, kseq);
-		katss_uncount_kmer(dint_counts, test_file, kseq);
+		katss_recount_kmer(test_counts, test_file, kseq);
+		katss_recount_kmer(mono_counts, test_file, kseq);
+		katss_recount_kmer(dint_counts, test_file, kseq);
 		enrichments->enrichments[i] = katss_top_prediction(test_counts, mono_counts, dint_counts, normalize);
 	}
 
@@ -313,9 +313,9 @@ katss_prob_ikke_mt(const char *test_file, unsigned int kmer, uint64_t iterations
 	char kseq[17];
 	for(uint64_t i=1; i<enrichments->num_enrichments; i++) {
 		katss_unhash(kseq, enrichments->enrichments[i-1].key, kmer, true);
-		katss_uncount_kmer_mt(test_counts, test_file, kseq, threads);
-		katss_uncount_kmer(mono_counts, test_file, kseq);
-		katss_uncount_kmer(dint_counts, test_file, kseq);
+		katss_recount_kmer_mt(test_counts, test_file, kseq, threads);
+		katss_recount_kmer_mt(mono_counts, test_file, kseq, threads);
+		katss_recount_kmer_mt(dint_counts, test_file, kseq, threads);
 		enrichments->enrichments[i] = katss_top_prediction(test_counts, mono_counts, dint_counts, normalize);
 	}
 

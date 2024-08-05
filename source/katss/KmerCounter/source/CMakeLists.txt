@@ -4,6 +4,7 @@ set(KATSS_SOURCE_FILES
 	"${CMAKE_CURRENT_SOURCE_DIR}/tables.c"
 	"${CMAKE_CURRENT_SOURCE_DIR}/seqseq.c"
 	"${CMAKE_CURRENT_SOURCE_DIR}/counter.c"
+	"${CMAKE_CURRENT_SOURCE_DIR}/recounter.c"
 	"${CMAKE_CURRENT_SOURCE_DIR}/uncounter.c"
 	"${CMAKE_CURRENT_SOURCE_DIR}/enrichments.c")
 
