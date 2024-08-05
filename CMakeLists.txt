@@ -4,6 +4,12 @@ project(KATSS
 	DESCRIPTION "K-mer counting function utilities."
 	LANGUAGES C)
 
+# Default to a release build.
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+	message(STATUS "No build type selected; defaulting to Release")
+	set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build" FORCE)
+endif()
+
 set(CMAKE_C_STANDARD 11)
 
 include(CheckIncludeFile)
