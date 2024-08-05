@@ -131,6 +131,33 @@ KatssCounter *katss_count_kmers_mt(const char *filename, unsigned int kmer, int 
 
 
 /**
+ * @brief Recount all k-mers in a KmerCounter
+ * 
+ * Sets all the counts to 0, and recount k-mers exclusing the k-mer specified from remove. 
+ * The KatssCounter will keep in memory the previous k-mers it has removed for subsequent recount,
+ * excluding those too.
+ * 
+ * @param counter   KatssCounter to recount k-mers
+ * @param filename  Name of the file containing the reads
+ * @param remove    K-mer to not include in counts
+ * @return int 0 if succeded, otherwise if error was encountered
+ */
+int katss_recount_kmer(KatssCounter *counter, const char *filename, const char *remove);
+
+
+/**
+ * @brief 
+ * 
+ * @param counter 
+ * @param filename 
+ * @param remove 
+ * @param threads 
+ * @return int 
+ */
+int katss_recount_kmer_mt(KatssCounter *counter, const char *filename, const char *remove, int threads);
+
+
+/**
  * @brief Uncount a kmer
  * 
  * @param counter 
