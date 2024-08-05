@@ -42,8 +42,6 @@ katss_count_kmers(const char *filename, unsigned int kmer)
 {
 	char filetype = determine_filetype(filename);
 	if(filetype == 'e') { /* Error determining filetype */
-		error_message("Unable to read sequence from file.\nCurrent supported file types are:"
-		              " FASTA, FASTQ, and file containing sequences per line.");
 		return NULL;
 	} else if (filetype == 'N') { /* Error opening file */
 		return NULL;
@@ -59,8 +57,6 @@ katss_count_kmers_mt(const char *filename, unsigned int kmer, int threads)
 {
 	char filetype = determine_filetype(filename);
 	if(filetype == 'e') { /* Error determining filetype */
-		error_message("Unable to read sequence from file.\nCurrent supported file types are:"
-		              " FASTA, FASTQ, and file containing sequences per line.");
 		return NULL;
 	} else if (filetype == 'N') { /* Error opening file */
 		return NULL;
@@ -145,8 +141,8 @@ count_file(const char *filename, unsigned int kmer, const char filetype)
 		}
 	} while(still_reading == BUFFER_SIZE);
 
-	/* If error was encountered while, reading report and return NULL */
-	if(still_reading == 0 || rnaferrno) {
+	/* If error was encountered while reading report and return NULL */
+	if(still_reading == 0 && rnaferrno) {
 		katss_free_counter(counter);
 		counter = NULL;
 		char *err = rnafstrerror(rnaferrno);
@@ -259,6 +255,8 @@ determine_filetype(const char *file)
     } else if (sequence_lines == 10) {
         return 'r'; // raw sequences file
     } else {
+		error_message("Unable to read sequence from file.\nCurrent supported file types are:"
+		              " FASTA, FASTQ, and file containing sequences per line.");
         return 'e'; // unsupported file type
     }
 }
