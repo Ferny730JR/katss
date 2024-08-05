@@ -2,11 +2,16 @@
 #include <errno.h>
 #include <string.h>
 
+#if (__STDC_NO_THREADS__)
+#  include "tinycthread.h"
+#else
+#  include <threads.h>
+#endif
+
 #include "counter.h"
 #include "hash_functions.h"
 #include "memory_utils.h"
 #include "rnafiles.h"
-#include "tinycthread.h"
 
 #define BUFFER_SIZE 65536U
 

@@ -2,11 +2,14 @@
 #define KATSS_CORE_H
 
 #include <stdint.h>
-#include <stdatomic.h>
-#include <stdio.h>
 #include <stdbool.h>
 
-#include "tinycthread.h"
+#if (__STDC_NO_THREADS__)
+#  include "tinycthread.h"
+#else
+#  include <threads.h>
+#endif
+
 
 
 /* Linked list used to store the removed k-mers */
