@@ -37,10 +37,11 @@ katss_recount_kmer(KatssCounter *counter, const char *filename, const char *remo
 		return 1;
 
 	/* Clear counter */
+	uint64_t total = ((uint64_t)counter->capacity) + 1;
 	if(counter->kmer <= 12)
-		memset(counter->table.small,  0x00, counter->capacity*sizeof(uint64_t));
+		memset(counter->table.small,  0x00, total * sizeof(uint64_t));
 	else
-		memset(counter->table.medium, 0x00, counter->capacity*sizeof(uint32_t));
+		memset(counter->table.medium, 0x00, total * sizeof(uint32_t));
 	
 	/* Push kmer to remove to counter */
 	kctr_push(counter, remove);
@@ -157,10 +158,11 @@ katss_recount_kmer_mt(KatssCounter *counter, const char *filename, const char *r
 		return 1;
 
 	/* Clear counter */
+	uint64_t total = ((uint64_t)counter->capacity) + 1;
 	if(counter->kmer <= 12)
-		memset(counter->table.small,  0x00, counter->capacity*sizeof(uint64_t));
+		memset(counter->table.small,  0x00, total * sizeof(uint64_t));
 	else
-		memset(counter->table.medium, 0x00, counter->capacity*sizeof(uint32_t));
+		memset(counter->table.medium, 0x00, total * sizeof(uint32_t));
 	
 	/* Push kmer to remove to counter */
 	kctr_push(counter, remove);
