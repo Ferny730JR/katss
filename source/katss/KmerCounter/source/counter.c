@@ -1,3 +1,4 @@
+#include <stdlib.h> // for random functions 
 #include <stdbool.h>
 #include <errno.h>
 #include <string.h>
@@ -20,7 +21,7 @@ struct threadinfo {
 	RnaFile rnafile;
 	KatssCounter *counter;
 	unsigned int kmer;
-	int boostrap;
+	int sample;
 	char filetype;
 };
 typedef struct threadinfo threadinfo;
@@ -57,15 +58,21 @@ katss_count_kmers(const char *filename, unsigned int kmer)
 KatssCounter *
 katss_count_kmers_mt(const char *filename, unsigned int kmer, int threads)
 {
+	/* Threads should be at least one, and at most 128 */
+	threads = MAX2(threads, 1);
+	threads = MIN2(threads, 128);
+
+	/* If one thread, use single threaded computation */
+	if(threads == 1)
+		return katss_count_kmers(filename, kmer);
+
+	/* Begin multithreaded computations */
 	char filetype = determine_filetype(filename);
 	if(filetype == 'e') { /* Error determining filetype */
 		return NULL;
 	} else if (filetype == 'N') { /* Error opening file */
 		return NULL;
 	}
-
-	threads = MAX2(threads, 1);
-	threads = MIN2(threads, 128);
 
 	/* Open RnaFile for reading */
 	char mode[2] = { 0 };
@@ -111,7 +118,7 @@ katss_count_kmers_mt(const char *filename, unsigned int kmer, int threads)
 
 
 KatssCounter *
-katss_count_kmers_bootstrap(const char *filename, unsigned int kmer, int bootstrap)
+katss_count_kmers_bootstrap(const char *filename, unsigned int kmer, int sample)
 {
 	char filetype = determine_filetype(filename);
 	if(filetype == 'e' || filetype == 'N')
@@ -137,14 +144,14 @@ katss_count_kmers_bootstrap(const char *filename, unsigned int kmer, int bootstr
 	if(counter == NULL)
 		goto cleanup_hasher;
 
-	/* Bootstrap should be between 1-100 */
-	bootstrap = MAX2(bootstrap, 1);
-	bootstrap = MIN2(bootstrap, 100);
+	/* sample should be between 1-100 */
+	sample = MAX2(sample, 1);
+	sample = MIN2(sample, 100);
 
 	/* int to subsample from rand() */
-	srand(time(NULL));
+	unsigned int seed = time(NULL);
 	while(rnafgets_unlocked(read_file, buffer, BUFFER_SIZE)) {
-		if(rand() % 100 > bootstrap)
+		if(rand_r(&seed) % 100 > sample)
 			continue;
 		katss_set_seq(hasher, buffer, filetype);
 		while(katss_get_fh(hasher, &hash_value, filetype)) {
@@ -153,7 +160,7 @@ katss_count_kmers_bootstrap(const char *filename, unsigned int kmer, int bootstr
 	}
 
 	if(rnaferrno) {
-		error_message("katss: bootstrap: %s\n", rnafstrerror_r(rnaferrno, buffer, BUFFER_SIZE));
+		error_message("katss: sample: %s\n", rnafstrerror_r(rnaferrno, buffer, BUFFER_SIZE));
 		katss_free_counter(counter);
 		counter = NULL;
 	}
@@ -184,8 +191,9 @@ count_file_bootstrap_mt(void *arg)
 	size_t cur_hash = 0;
 
 	/* Begin counting */
+	unsigned int seed = time(NULL);
 	while(rnafgets(args->rnafile, buffer, BUFFER_SIZE)) {
-		if(rand() % 100 >= args->boostrap)
+		if(rand_r(&seed) % 100 >= args->sample)
 			continue;
 		katss_set_seq(hasher, buffer, args->filetype);
 		while(katss_get_fh(hasher, &hash_values[cur_hash], args->filetype)) {
@@ -209,18 +217,23 @@ count_file_bootstrap_mt(void *arg)
 
 
 KatssCounter *
-katss_count_kmers_bootstrap_mt(const char *filename, unsigned int kmer, int bootstrap, int threads)
+katss_count_kmers_bootstrap_mt(const char *filename, unsigned int kmer, int sample, int threads)
 {
+	threads = MAX2(threads, 1);
+	threads = MIN2(threads, 128);
+
+	/* Process single-threaded computation */
+	if(threads == 1)
+		return katss_count_kmers_bootstrap(filename, kmer, sample);
+
+	/* Multi-threading */
 	char filetype = determine_filetype(filename);
 	if(filetype == 'e' || filetype == 'N')
 		return NULL;
 
-	threads = MAX2(threads, 1);
-	threads = MIN2(threads, 128);
-
-	/* Bootstrap should be between 1-100 */
-	bootstrap = MAX2(bootstrap, 1);
-	bootstrap = MIN2(bootstrap, 100);
+	/* sample should be between 1-100 */
+	sample = MAX2(sample, 1);
+	sample = MIN2(sample, 100);
 
 	/* Open RnaFile for reading */
 	char mode[2] = { 0 };
@@ -240,9 +253,6 @@ katss_count_kmers_bootstrap_mt(const char *filename, unsigned int kmer, int boot
 		return NULL;
 	}
 
-	/* Set random seed */
-	srand(time(NULL));
-
 	threadinfo *jobarg = s_malloc(threads * sizeof *jobarg);
 	thrd_t *jobs = s_malloc(threads * sizeof *jobs);
 	for(int i=0; i<threads; i++) {
@@ -250,7 +260,7 @@ katss_count_kmers_bootstrap_mt(const char *filename, unsigned int kmer, int boot
 		jobarg[i].counter = counter;
 		jobarg[i].kmer = kmer;
 		jobarg[i].filetype = filetype;
-		jobarg[i].boostrap = bootstrap;
+		jobarg[i].sample = sample;
 
 		/* Start threads */
 		thrd_create(&jobs[i], count_file_bootstrap_mt, &jobarg[i]);

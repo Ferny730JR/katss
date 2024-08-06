@@ -131,6 +131,30 @@ KatssCounter *katss_count_kmers_mt(const char *filename, unsigned int kmer, int 
 
 
 /**
+ * @brief Count forward-strand k-mers in a sub-sampled file.
+ * 
+ * @param filename   Name of the file to count sub-sampled k-mers on
+ * @param kmer       Length of k-mer to count
+ * @param sample     Percent to sample. Should be between 1 and 100
+ * @return KatssCounter* struct containing the sub-sampled counts
+ */
+KatssCounter *
+katss_count_kmers_bootstrap(const char *filename, unsigned int kmer, int sample);
+
+
+/**
+ * @brief Count forward-strand k-mers in a sub-sampled file.
+ * 
+ * @param filename Name of the file to count sub-samples k-mers on
+ * @param kmer     Length of the k-mer to count
+ * @param sample   Percent to sample. Should be between 1 and 100
+ * @param threads  Number of threads to use
+ * @return KatssCounter* struct containing the sub-sampled counts
+ */
+KatssCounter *
+katss_count_kmers_bootstrap_mt(const char *filename, unsigned int kmer, int sample, int threads);
+
+/**
  * @brief Recount all k-mers in a KmerCounter
  * 
  * Sets all the counts to 0, and recount k-mers exclusing the k-mer specified from remove. 
