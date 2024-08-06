@@ -185,6 +185,22 @@ rnafgeterrno(void)
 }
 
 char *
+rnafstrerror_r(int _rnaferrno, char *buffer, size_t bufsize)
+{
+	switch(_rnaferrno) {
+	case 0: strncpy(buffer, "No error was encountered.", bufsize); break;
+	case 1: strerror_r(errno, buffer, bufsize); break;
+	case 2: strncpy(buffer,  "Mutex failed to initialize.", bufsize); break;
+	case 3: strncpy(buffer,  "Invalid mode passsed.", bufsize); break;
+	case 4: strncpy(buffer,  "Read failed, could not determine type of file.", bufsize); break;
+	case 5: strncpy(buffer,  "Read failed, sequence is larger than input buffer.", bufsize); break;
+	case 6: strncpy(buffer,  "Out of memory.", bufsize); break;
+	default: strncpy(buffer, "Unrecognized error message.", bufsize); break;
+	}
+	return buffer;
+}
+
+char *
 rnafstrerror(int _rnaferrno)
 {
 	char *buffer = malloc(1000);
@@ -193,17 +209,7 @@ rnafstrerror(int _rnaferrno)
 		return NULL;
 	}
 
-	switch(_rnaferrno) {
-	case 0: strncpy(buffer, "No error was encountered.", 1000); break;
-	case 1: strerror_r(errno, buffer, 1000); break;
-	case 2: strncpy(buffer, "Mutex failed to initialize.", 1000); break;
-	case 3: strncpy(buffer, "Invalid mode passsed.", 1000); break;
-	case 4: strncpy(buffer, "Read failed, could not determine type of file.", 1000); break;
-	case 5: strncpy(buffer, "Read failed, sequence is larger than input buffer.", 1000); break;
-	case 6: strncpy(buffer, "Out of memory.", 1000); break;
-	default: strncpy(buffer, "Unrecognized error message.", 1000); break;
-	}
-	return buffer;
+	return rnafstrerror_r(_rnaferrno, buffer, 1000);
 }
 
 /*====================================== Extract Mode Info =======================================*/
@@ -657,7 +663,7 @@ rnaf_line(rnaf_statep state, unsigned char *buffer, size_t bufsize)
 	/* Sanity checks */
 	if(state == NULL || buffer == NULL || bufsize == 0)
 		return NULL;
-	if(feof(state->file))
+	if(feof(state->file)) //TODO: feof returns true even if there are bytes in internal buffer
 		return NULL;
 
 	/* Declare variables */

@@ -73,6 +73,17 @@ char *rnafstrerror(int _rnaferrno);
 
 
 /**
+ * @brief Fill buffer with a string detailing the error code from _rnaferrno
+ * 
+ * @param _rnaferrno The rnaferrno variable
+ * @param buffer     Buffer to fill with error description
+ * @param bufsize    Size of the buffer
+ * @return char* 
+ */
+char *rnafstrerror_r(int _rnaferrno, char *buffer, size_t bufsize);
+
+
+/**
  * @brief Read RnaFile sequences into buffer. Will continue reading until it can no
  * longer fit a full sequence within bufsize characters.
  * 
