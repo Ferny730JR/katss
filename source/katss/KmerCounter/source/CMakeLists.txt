@@ -6,7 +6,8 @@ set(KATSS_SOURCE_FILES
 	"${CMAKE_CURRENT_SOURCE_DIR}/counter.c"
 	"${CMAKE_CURRENT_SOURCE_DIR}/recounter.c"
 	"${CMAKE_CURRENT_SOURCE_DIR}/uncounter.c"
-	"${CMAKE_CURRENT_SOURCE_DIR}/enrichments.c")
+	"${CMAKE_CURRENT_SOURCE_DIR}/enrichments.c"
+	"${CMAKE_CURRENT_SOURCE_DIR}/bootstrap.c")
 
 # Create objects for source files
 add_library(OBJLIB OBJECT "${KATSS_SOURCE_FILES}")
