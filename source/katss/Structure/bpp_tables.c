@@ -161,12 +161,12 @@ unhash(char *key, unsigned int hash_value, int length, int is_t)
 static void
 print_table_to_file(kmerHashTable *table, FILE *table_file, char sep)
 {
+	char *key = s_malloc(table->kmer + 1);
 	for(unsigned long i = 0; i < table->capacity; i++) {
 		if(table->entries[i] == NULL) {
 			continue;
 		}
 
-		char *key = s_malloc(table->kmer+1);
 		unhash(key, table->entries[i]->hash, table->kmer, 0);
 		fprintf(table_file, "%s", key);
 		for(unsigned long j = 0; j < table->cols; j++) {
@@ -174,6 +174,7 @@ print_table_to_file(kmerHashTable *table, FILE *table_file, char sep)
 		}
 		fprintf(table_file,"\n");
 	}
+	free(key);
 }
 
 
