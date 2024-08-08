@@ -57,13 +57,27 @@ int
 default="1"
 optional
 
-option "file-delimiter" d
+option "threads" -
+"Set the number of threads to use in ikke. This allows to process calculations\
+ in parallel using multiple threads."
+details="By default, processing of the test and control files is computed\
+ serially. Specifying this options allows for parallelization of the\
+ computations. Though, this not only increases memory consumption as each\
+ thread requires storing sequences, but it is possible to that it can provide\
+ incorrect counts or even fail when the files have long sequences (>16000nt).\
+ In other words, if you have long sequences in your file, it is not recommended\
+ to turn on threads.\n"
+int
+default="1"
+optional
+
+option "delimiter" d
 "Set the delimiter used to separate the values in the output file."
-details="The output of Ikke is by default in CSV format, meaning the values are \
+details="The output of ikke is by default in CSV format, meaning the values are \
 comma-delimited. By specifying this option, you can change the delimiter used \
 to separate the values. The available delimiters are: comma (,), tab (t), \
 colon (:), vertical bar (|), and space (\" \"). For example, setting \
-`--file-delimiter=\" \"` will change the delimiter to be space-delimited. If \
+`--delimiter=\" \"` will change the delimiter to be space-delimited. If \
 using the comma delimiter, the file extension will be \".csv\"; if using the \
 tab delimiter, the file extension will be \".tsv\"; otherwise, the extension \
 will be \".dsv\". Support for other delimiters is currently unavailable.\n"
@@ -101,3 +115,22 @@ details="Using the dinucleotide and mononucleotide frequencies of the target\
  and are used to discover the motif.\n"
 flag
 off
+
+option "bootstrap" b
+"Bootstrap the enrichments the specified number of times."
+details="This calculates the enrichments from a randomly subsampled (by default\
+ 10%) region from the provided sequences. It then repeats this process the\
+ specified number of times, calculates the mean enrichments from the subsampled\
+ sequences, and the standard deviation.\n"
+int
+default="10"
+argoptional
+optional
+
+option "sample" -
+"Percent to randomly subsample sequences from the test and control files."
+details="Should be a number between 1 and 100. By default, katss subsamples 10%\
+ of the files (equivalent to `--sample=10`)."
+int
+default="10"
+optional

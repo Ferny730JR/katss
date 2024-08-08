@@ -55,15 +55,24 @@ struct ikke_args_info
   int iterations_arg;	/**< @brief Set the number of iterations for ikke. (default='1').  */
   char * iterations_orig;	/**< @brief Set the number of iterations for ikke. original value given at command line.  */
   const char *iterations_help; /**< @brief Set the number of iterations for ikke. help description.  */
-  char * file_delimiter_arg;	/**< @brief Set the delimiter used to separate the values in the output file. (default=',').  */
-  char * file_delimiter_orig;	/**< @brief Set the delimiter used to separate the values in the output file. original value given at command line.  */
-  const char *file_delimiter_help; /**< @brief Set the delimiter used to separate the values in the output file. help description.  */
+  int threads_arg;	/**< @brief Set the number of threads to use in ikke. This allows to process calculations in parallel using multiple threads. (default='1').  */
+  char * threads_orig;	/**< @brief Set the number of threads to use in ikke. This allows to process calculations in parallel using multiple threads. original value given at command line.  */
+  const char *threads_help; /**< @brief Set the number of threads to use in ikke. This allows to process calculations in parallel using multiple threads. help description.  */
+  char * delimiter_arg;	/**< @brief Set the delimiter used to separate the values in the output file. (default=',').  */
+  char * delimiter_orig;	/**< @brief Set the delimiter used to separate the values in the output file. original value given at command line.  */
+  const char *delimiter_help; /**< @brief Set the delimiter used to separate the values in the output file. help description.  */
   int no_log_flag;	/**< @brief Don't normalize enrichments to log2. (default=off).  */
   const char *no_log_help; /**< @brief Don't normalize enrichments to log2. help description.  */
   int enrichments_flag;	/**< @brief Compute the regular enrichments. (default=off).  */
   const char *enrichments_help; /**< @brief Compute the regular enrichments. help description.  */
   int independent_probs_flag;	/**< @brief Calculate the enrichments without the input reads. (default=off).  */
   const char *independent_probs_help; /**< @brief Calculate the enrichments without the input reads. help description.  */
+  int bootstrap_arg;	/**< @brief Bootstrap the enrichments the specified number of times. (default='10').  */
+  char * bootstrap_orig;	/**< @brief Bootstrap the enrichments the specified number of times. original value given at command line.  */
+  const char *bootstrap_help; /**< @brief Bootstrap the enrichments the specified number of times. help description.  */
+  int sample_arg;	/**< @brief Percent to randomly subsample sequences from the test and control files. (default='10').  */
+  char * sample_orig;	/**< @brief Percent to randomly subsample sequences from the test and control files. original value given at command line.  */
+  const char *sample_help; /**< @brief Percent to randomly subsample sequences from the test and control files. help description.  */
   
   unsigned int help_given ;	/**< @brief Whether help was given.  */
   unsigned int detailed_help_given ;	/**< @brief Whether detailed-help was given.  */
@@ -73,10 +82,13 @@ struct ikke_args_info
   unsigned int output_given ;	/**< @brief Whether output was given.  */
   unsigned int kmer_given ;	/**< @brief Whether kmer was given.  */
   unsigned int iterations_given ;	/**< @brief Whether iterations was given.  */
-  unsigned int file_delimiter_given ;	/**< @brief Whether file-delimiter was given.  */
+  unsigned int threads_given ;	/**< @brief Whether threads was given.  */
+  unsigned int delimiter_given ;	/**< @brief Whether delimiter was given.  */
   unsigned int no_log_given ;	/**< @brief Whether no-log was given.  */
   unsigned int enrichments_given ;	/**< @brief Whether enrichments was given.  */
   unsigned int independent_probs_given ;	/**< @brief Whether independent-probs was given.  */
+  unsigned int bootstrap_given ;	/**< @brief Whether bootstrap was given.  */
+  unsigned int sample_given ;	/**< @brief Whether sample was given.  */
 
 } ;
 

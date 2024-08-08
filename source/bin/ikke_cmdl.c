@@ -33,31 +33,37 @@ const char *ikke_args_info_versiontext = "";
 const char *ikke_args_info_description = "IKKE is a C program designed to analyze RNA sequences and identify enriched\nmotifs in protein-bound RNA.\nThe program follows a structured pipeline that includes k-mer counting,\nfrequency calculations, and enrichment analysis, producing a file with ranked\nk-mers based on their likelihood of being a motif.";
 
 const char *ikke_args_info_detailed_help[] = {
-  "  -h, --help                 Print help and exit",
-  "      --detailed-help        Print help, including all details and hidden\n                               options, and exit",
-  "  -V, --version              Print version and exit",
+  "  -h, --help               Print help and exit",
+  "      --detailed-help      Print help, including all details and hidden\n                             options, and exit",
+  "  -V, --version            Print version and exit",
   "\nI/O Options:",
   "  Command line options for input and output processing.\n",
-  "  -t, --test=filename        Read the protein bound RNA sequences file.",
+  "  -t, --test=filename      Read the protein bound RNA sequences file.",
   "  Specify which file you want to be the test sequences. Note that you can only\n  pass one test file in the command.\n",
-  "  -c, --control=filename     Read the controls sequences file.",
+  "  -c, --control=filename   Read the controls sequences file.",
   "  Specify which file you want to be the control sequences. Note that you can\n  only pass one control file in the command.\n",
-  "  -o, --output=filename      Set the name of the output files.",
+  "  -o, --output=filename    Set the name of the output files.",
   "  Specify the default name for the output file. If this option is not used, the\n  default name is \"motif\".\n",
-  "  -k, --kmer=INT             Set the length of k-mers.  (default=`5')",
+  "  -k, --kmer=INT           Set the length of k-mers.  (default=`5')",
   "  Specify the length of the k-mers you want to perform the enrichment analysis\n  on.\n",
-  "  -i, --iterations=INT       Set the number of iterations for ikke.\n                               (default=`1')",
+  "  -i, --iterations=INT     Set the number of iterations for ikke.\n                             (default=`1')",
   "  ",
-  "  -d, --file-delimiter=char  Set the delimiter used to separate the values in\n                               the output file.  (default=`,')",
-  "  The output of Ikke is by default in CSV format, meaning the values are\n  comma-delimited. By specifying this option, you can change the delimiter used\n  to separate the values. The available delimiters are: comma (,), tab (t),\n  colon (:), vertical bar (|), and space (\" \"). For example, setting\n  `--file-delimiter=\" \"` will change the delimiter to be space-delimited. If\n  using the comma delimiter, the file extension will be \".csv\"; if using the\n  tab delimiter, the file extension will be \".tsv\"; otherwise, the extension\n  will be \".dsv\". Support for other delimiters is currently unavailable.\n",
-  "      --no-log               Don't normalize enrichments to log2.\n                               (default=off)",
+  "      --threads=INT        Set the number of threads to use in ikke. This\n                             allows to process calculations in parallel using\n                             multiple threads.  (default=`1')",
+  "  By default, processing of the test and control files is computed serially.\n  Specifying this options allows for parallelization of the computations.\n  Though, this not only increases memory consumption as each thread requires\n  storing sequences, but it is possible to that it can provide incorrect counts\n  or even fail when the files have long sequences (>16000nt). In other words,\n  if you have long sequences in your file, it is not recommended to turn on\n  threads.\n",
+  "  -d, --delimiter=char     Set the delimiter used to separate the values in the\n                             output file.  (default=`,')",
+  "  The output of ikke is by default in CSV format, meaning the values are\n  comma-delimited. By specifying this option, you can change the delimiter used\n  to separate the values. The available delimiters are: comma (,), tab (t),\n  colon (:), vertical bar (|), and space (\" \"). For example, setting\n  `--delimiter=\" \"` will change the delimiter to be space-delimited. If using\n  the comma delimiter, the file extension will be \".csv\"; if using the tab\n  delimiter, the file extension will be \".tsv\"; otherwise, the extension will\n  be \".dsv\". Support for other delimiters is currently unavailable.\n",
+  "      --no-log             Don't normalize enrichments to log2.  (default=off)",
   "  The enrichment values produced by ikke are by default normalized to the\n  logarithm base 2. This is done to help visualize the proportional changes\n  between the test and the control data. By toggling this flag, you can get the\n  pure enrichment values rather than the normalized values.\n",
   "\nAlgorithms:",
   "  Select additional algorithms to determine the calculations.\n",
-  "  -R, --enrichments          Compute the regular enrichments.  (default=off)",
+  "  -R, --enrichments        Compute the regular enrichments.  (default=off)",
   "  This algorithm calculates the R value from all k-mer frequencies in the given\n  files.\n",
-  "  -p, --independent-probs    Calculate the enrichments without the input reads.\n                               (default=off)",
+  "  -p, --independent-probs  Calculate the enrichments without the input reads.\n                             (default=off)",
   "  Using the dinucleotide and mononucleotide frequencies of the target data,\n  ikke can make an accurate prediction as to what the enrichment values should\n  be. As such, when computing the actual frequencies for all k-mers, the values\n  that deviate the most from the predictions are the most significant, and are\n  used to discover the motif.\n",
+  "  -b, --bootstrap[=INT]    Bootstrap the enrichments the specified number of\n                             times.  (default=`10')",
+  "  This calculates the enrichments from a randomly subsampled (by default 10%)\n  region from the provided sequences. It then repeats this process the\n  specified number of times, calculates the mean enrichments from the\n  subsampled sequences, and the standard deviation.\n",
+  "      --sample=INT         Percent to randomly subsample sequences from the\n                             test and control files.  (default=`10')",
+  "  Should be a number between 1 and 100. By default, katss subsamples 10% of the\n  files (equivalent to `--sample=10`).",
     0
 };
 
@@ -77,14 +83,17 @@ init_help_array(void)
   ikke_args_info_help[10] = ikke_args_info_detailed_help[15];
   ikke_args_info_help[11] = ikke_args_info_detailed_help[17];
   ikke_args_info_help[12] = ikke_args_info_detailed_help[19];
-  ikke_args_info_help[13] = ikke_args_info_detailed_help[20];
-  ikke_args_info_help[14] = ikke_args_info_detailed_help[21];
+  ikke_args_info_help[13] = ikke_args_info_detailed_help[21];
+  ikke_args_info_help[14] = ikke_args_info_detailed_help[22];
   ikke_args_info_help[15] = ikke_args_info_detailed_help[23];
-  ikke_args_info_help[16] = 0; 
+  ikke_args_info_help[16] = ikke_args_info_detailed_help[25];
+  ikke_args_info_help[17] = ikke_args_info_detailed_help[27];
+  ikke_args_info_help[18] = ikke_args_info_detailed_help[29];
+  ikke_args_info_help[19] = 0; 
   
 }
 
-const char *ikke_args_info_help[17];
+const char *ikke_args_info_help[20];
 
 typedef enum {ARG_NO
   , ARG_FLAG
@@ -116,10 +125,13 @@ void clear_given (struct ikke_args_info *args_info)
   args_info->output_given = 0 ;
   args_info->kmer_given = 0 ;
   args_info->iterations_given = 0 ;
-  args_info->file_delimiter_given = 0 ;
+  args_info->threads_given = 0 ;
+  args_info->delimiter_given = 0 ;
   args_info->no_log_given = 0 ;
   args_info->enrichments_given = 0 ;
   args_info->independent_probs_given = 0 ;
+  args_info->bootstrap_given = 0 ;
+  args_info->sample_given = 0 ;
 }
 
 static
@@ -136,11 +148,17 @@ void clear_args (struct ikke_args_info *args_info)
   args_info->kmer_orig = NULL;
   args_info->iterations_arg = 1;
   args_info->iterations_orig = NULL;
-  args_info->file_delimiter_arg = gengetopt_strdup (",");
-  args_info->file_delimiter_orig = NULL;
+  args_info->threads_arg = 1;
+  args_info->threads_orig = NULL;
+  args_info->delimiter_arg = gengetopt_strdup (",");
+  args_info->delimiter_orig = NULL;
   args_info->no_log_flag = 0;
   args_info->enrichments_flag = 0;
   args_info->independent_probs_flag = 0;
+  args_info->bootstrap_arg = 10;
+  args_info->bootstrap_orig = NULL;
+  args_info->sample_arg = 10;
+  args_info->sample_orig = NULL;
   
 }
 
@@ -157,10 +175,13 @@ void init_args_info(struct ikke_args_info *args_info)
   args_info->output_help = ikke_args_info_detailed_help[9] ;
   args_info->kmer_help = ikke_args_info_detailed_help[11] ;
   args_info->iterations_help = ikke_args_info_detailed_help[13] ;
-  args_info->file_delimiter_help = ikke_args_info_detailed_help[15] ;
-  args_info->no_log_help = ikke_args_info_detailed_help[17] ;
-  args_info->enrichments_help = ikke_args_info_detailed_help[21] ;
-  args_info->independent_probs_help = ikke_args_info_detailed_help[23] ;
+  args_info->threads_help = ikke_args_info_detailed_help[15] ;
+  args_info->delimiter_help = ikke_args_info_detailed_help[17] ;
+  args_info->no_log_help = ikke_args_info_detailed_help[19] ;
+  args_info->enrichments_help = ikke_args_info_detailed_help[23] ;
+  args_info->independent_probs_help = ikke_args_info_detailed_help[25] ;
+  args_info->bootstrap_help = ikke_args_info_detailed_help[27] ;
+  args_info->sample_help = ikke_args_info_detailed_help[29] ;
   
 }
 
@@ -267,8 +288,11 @@ ikke_cmdline_parser_release (struct ikke_args_info *args_info)
   free_string_field (&(args_info->output_orig));
   free_string_field (&(args_info->kmer_orig));
   free_string_field (&(args_info->iterations_orig));
-  free_string_field (&(args_info->file_delimiter_arg));
-  free_string_field (&(args_info->file_delimiter_orig));
+  free_string_field (&(args_info->threads_orig));
+  free_string_field (&(args_info->delimiter_arg));
+  free_string_field (&(args_info->delimiter_orig));
+  free_string_field (&(args_info->bootstrap_orig));
+  free_string_field (&(args_info->sample_orig));
   
   
 
@@ -315,14 +339,20 @@ ikke_cmdline_parser_dump(FILE *outfile, struct ikke_args_info *args_info)
     write_into_file(outfile, "kmer", args_info->kmer_orig, 0);
   if (args_info->iterations_given)
     write_into_file(outfile, "iterations", args_info->iterations_orig, 0);
-  if (args_info->file_delimiter_given)
-    write_into_file(outfile, "file-delimiter", args_info->file_delimiter_orig, 0);
+  if (args_info->threads_given)
+    write_into_file(outfile, "threads", args_info->threads_orig, 0);
+  if (args_info->delimiter_given)
+    write_into_file(outfile, "delimiter", args_info->delimiter_orig, 0);
   if (args_info->no_log_given)
     write_into_file(outfile, "no-log", 0, 0 );
   if (args_info->enrichments_given)
     write_into_file(outfile, "enrichments", 0, 0 );
   if (args_info->independent_probs_given)
     write_into_file(outfile, "independent-probs", 0, 0 );
+  if (args_info->bootstrap_given)
+    write_into_file(outfile, "bootstrap", args_info->bootstrap_orig, 0);
+  if (args_info->sample_given)
+    write_into_file(outfile, "sample", args_info->sample_orig, 0);
   
 
   i = EXIT_SUCCESS;
@@ -1188,10 +1218,13 @@ ikke_cmdline_parser_internal (
         { "output",	1, NULL, 'o' },
         { "kmer",	1, NULL, 'k' },
         { "iterations",	1, NULL, 'i' },
-        { "file-delimiter",	1, NULL, 'd' },
+        { "threads",	1, NULL, 0 },
+        { "delimiter",	1, NULL, 'd' },
         { "no-log",	0, NULL, 0 },
         { "enrichments",	0, NULL, 'R' },
         { "independent-probs",	0, NULL, 'p' },
+        { "bootstrap",	2, NULL, 'b' },
+        { "sample",	1, NULL, 0 },
         { 0,  0, 0, 0 }
       };
 
@@ -1200,7 +1233,7 @@ ikke_cmdline_parser_internal (
       custom_opterr = opterr;
       custom_optopt = optopt;
 
-      c = custom_getopt_long (argc, argv, "hVt:c:o:k:i:d:Rp", long_options, &option_index);
+      c = custom_getopt_long (argc, argv, "hVt:c:o:k:i:d:Rpb::", long_options, &option_index);
 
       optarg = custom_optarg;
       optind = custom_optind;
@@ -1284,11 +1317,11 @@ ikke_cmdline_parser_internal (
         case 'd':	/* Set the delimiter used to separate the values in the output file..  */
         
         
-          if (update_arg( (void *)&(args_info->file_delimiter_arg), 
-               &(args_info->file_delimiter_orig), &(args_info->file_delimiter_given),
-              &(local_args_info.file_delimiter_given), optarg, 0, ",", ARG_STRING,
+          if (update_arg( (void *)&(args_info->delimiter_arg), 
+               &(args_info->delimiter_orig), &(args_info->delimiter_given),
+              &(local_args_info.delimiter_given), optarg, 0, ",", ARG_STRING,
               check_ambiguity, override, 0, 0,
-              "file-delimiter", 'd',
+              "delimiter", 'd',
               additional_error))
             goto failure;
         
@@ -1313,6 +1346,18 @@ ikke_cmdline_parser_internal (
             goto failure;
         
           break;
+        case 'b':	/* Bootstrap the enrichments the specified number of times..  */
+        
+        
+          if (update_arg( (void *)&(args_info->bootstrap_arg), 
+               &(args_info->bootstrap_orig), &(args_info->bootstrap_given),
+              &(local_args_info.bootstrap_given), optarg, 0, "10", ARG_INT,
+              check_ambiguity, override, 0, 0,
+              "bootstrap", 'b',
+              additional_error))
+            goto failure;
+        
+          break;
 
         case 0:	/* Long option with no short option */
           if (strcmp (long_options[option_index].name, "detailed-help") == 0) {
@@ -1321,14 +1366,42 @@ ikke_cmdline_parser_internal (
             exit (EXIT_SUCCESS);
           }
 
+          /* Set the number of threads to use in ikke. This allows to process calculations in parallel using multiple threads..  */
+          if (strcmp (long_options[option_index].name, "threads") == 0)
+          {
+          
+          
+            if (update_arg( (void *)&(args_info->threads_arg), 
+                 &(args_info->threads_orig), &(args_info->threads_given),
+                &(local_args_info.threads_given), optarg, 0, "1", ARG_INT,
+                check_ambiguity, override, 0, 0,
+                "threads", '-',
+                additional_error))
+              goto failure;
+          
+          }
           /* Don't normalize enrichments to log2..  */
-          if (strcmp (long_options[option_index].name, "no-log") == 0)
+          else if (strcmp (long_options[option_index].name, "no-log") == 0)
           {
           
           
             if (update_arg((void *)&(args_info->no_log_flag), 0, &(args_info->no_log_given),
                 &(local_args_info.no_log_given), optarg, 0, 0, ARG_FLAG,
                 check_ambiguity, override, 1, 0, "no-log", '-',
+                additional_error))
+              goto failure;
+          
+          }
+          /* Percent to randomly subsample sequences from the test and control files..  */
+          else if (strcmp (long_options[option_index].name, "sample") == 0)
+          {
+          
+          
+            if (update_arg( (void *)&(args_info->sample_arg), 
+                 &(args_info->sample_orig), &(args_info->sample_given),
+                &(local_args_info.sample_given), optarg, 0, "10", ARG_INT,
+                check_ambiguity, override, 0, 0,
+                "sample", '-',
                 additional_error))
               goto failure;
           
