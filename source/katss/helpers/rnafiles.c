@@ -124,7 +124,7 @@ rnafopen(const char *filename, const char *mode)
 		rna_file->stream.next_in = rna_file->in_buf;
 #else
 		/* allocate inflate state */
-		int ret;
+		int ret = Z_ERRNO;
 		rna_file->stream.zalloc = Z_NULL;
 		rna_file->stream.zfree = Z_NULL;
 		rna_file->stream.opaque = Z_NULL;
