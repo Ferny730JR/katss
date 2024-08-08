@@ -9,21 +9,6 @@
 #include "enrichments.h"
 #include "bootstrap.h"
 
-struct KatssBootstrapData {
-	uint32_t kmer_hash;
-	double mean;
-	double stdev;
-};
-
-struct KatssBootstrap {
-	struct KatssBootstrapData *data;
-	uint64_t total;
-};
-
-typedef struct KatssBootstrap KatssBootstrap;
-typedef struct KatssOptions KatssOptions;
-
-
 void
 katss_init_default_opts(KatssOptions *opts)
 {
@@ -89,15 +74,20 @@ predict_kmer(char *kseq, KatssCounter *monomer_counts, KatssCounter *dimer_count
 static int
 process_count(const char *file, KatssBootstrap *bootstrap, KatssOptions *opts, int run)
 {
-	KatssCounter *counter = katss_count_kmers_bootstrap_mt(file, opts->kmer, opts->sample, opts->threads);
+	unsigned int kmer = (unsigned int)opts->kmer;
+	int smp = opts->sample;
+	int thr = opts->threads;
+
+	KatssCounter *counter = katss_count_kmers_bootstrap_mt(file, kmer, smp, thr);
 	if(counter == NULL)
 		return 1;
-	
+
 	/* Update standard deviation */
 	uint64_t count;
 	for(uint64_t i=0; i<bootstrap->total; i++) {
 		katss_get_from_hash(counter, KATSS_UINT64, &count, (uint32_t)i);
 		running_stdev(count, &bootstrap->data[i].mean, &bootstrap->data[i].stdev, run);
+		bootstrap->data[i].kmer_hash = (uint32_t)i;
 	}
 
 	/* No error encountered */
@@ -134,6 +124,7 @@ process_enrichments_prob(const char *test_file, KatssBootstrap *bootstrap, Katss
 		
 		double rval = test_frq / ctrl_frq;
 		running_stdev(rval, &bootstrap->data[i].mean, &bootstrap->data[i].stdev, run);
+		bootstrap->data[i].kmer_hash = (uint32_t)i;
 	}
 	return_code = 0;
 
@@ -177,6 +168,7 @@ process_enrichments(const char *test_file, const char *ctrl_file,
 
 		double rval = test_frq / ctrl_frq;
 		running_stdev(rval, &bootstrap->data[i].mean, &bootstrap->data[i].stdev, run);
+		bootstrap->data[i].kmer_hash = (uint32_t)i;
 	}
 	return_code = 0;
 
@@ -222,6 +214,19 @@ katss_free_bootstrap(KatssBootstrap *bootstrap)
 	free(bootstrap);
 }
 
+static int
+bootstrap_compare(const void *a, const void *b)
+{
+	const KatssBootstrapData *p1 = (KatssBootstrapData *)a;
+	const KatssBootstrapData *p2 = (KatssBootstrapData *)b;
+
+	if(p1->mean < p2->mean)
+		return 1;
+	else if(p1->mean > p2->mean)
+		return -1;
+	return 0;
+}
+
 KatssBootstrap *
 katss_bootstrap(const char *test_file, const char *ctrl_file, KatssOptions *opts)
 {
@@ -261,6 +266,8 @@ katss_bootstrap(const char *test_file, const char *ctrl_file, KatssOptions *opts
 	for(uint64_t i = 0; bootstrap != NULL && i < bootstrap->total; i++) {
 		bootstrap->data[i].stdev = sqrt(bootstrap->data[i].stdev / (opts->bs_iters - 1));
 	}
+
+	qsort(bootstrap->data, bootstrap->total, sizeof *bootstrap->data, bootstrap_compare);
 
 	if(!options_passed)
 		free(opts);

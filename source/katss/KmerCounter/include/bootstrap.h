@@ -19,8 +19,20 @@ struct KatssOptions {
 	int            threads;       /** Number of threads to use */
 };
 
+struct KatssBootstrapData {
+	uint32_t kmer_hash;
+	double mean;
+	double stdev;
+};
+
+struct KatssBootstrap {
+	struct KatssBootstrapData *data;
+	uint64_t total;
+};
+
 typedef struct KatssOptions KatssOptions;
 typedef struct KatssBootstrap KatssBootstrap;
+typedef struct KatssBootstrapData KatssBootstrapData;
 
 
 /**
@@ -45,5 +57,12 @@ void katss_free_bootstrap(KatssBootstrap *bootstrap);
  * @return KatssBootstrap* The bootstrap struct with the information
  */
 KatssBootstrap *katss_bootstrap(const char *test_file, const char *ctrl_file, KatssOptions *opts);
+
+
+/**
+ * @brief Initialize the default options for a KatssOptions struct
+ * 
+ */
+void katss_init_default_opts(KatssOptions *opts);
 
 #endif // KATSS_BOOTSTRAP_H
