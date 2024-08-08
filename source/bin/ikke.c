@@ -141,7 +141,7 @@ main(int argc, char *argv[])
 		warning_message("Ignoring sample. Bootstrap must be enable to sub-sample file.");
 
 	if(opt.bootstrap && (opt.sample < 1 || 100 < opt.sample)) {
-		warning_message("Invalid sample: cannot sample %d\% of the file. "
+		warning_message("Invalid sample: cannot sample %d%% of the file. "
 		                "Sample must be a number between 1 and 100. Defaulting "
 						"to 10.");
 		opt.sample = 10;
