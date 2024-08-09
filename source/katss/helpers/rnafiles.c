@@ -33,11 +33,11 @@ struct rnaf_state {
 	FILE *file;                    /** File pointer */
 	COMPRESSION_TYPE compression;  /** Type of compression, if any */
 	unsigned char type;            /** Type of file, e.g FASTA, FASTQ, or reads */
-#if defined _IGZIP_H                /** Use isa-l if available, otherwise zlib */
-	struct inflate_state stream;   /** Decompressor */
+#if defined _IGZIP_H               /** Use isa-l if available, otherwise zlib */
+	struct inflate_state stream;   /** ISA-L Decompressor */
 #else
-	z_stream stream;
-	bool stream_is_init;
+	z_stream stream;               /** ZLIB Decompressor */
+	bool stream_is_init;           /** Check is stream is initialized */
 #endif
 
 	unsigned char *in_buf;         /** Input buffer*/
@@ -50,11 +50,6 @@ struct rnaf_state {
 };
 
 typedef struct rnaf_state *rnaf_statep;
-static bool extract_mode(rnaf_statep state, const char *mode);
-static COMPRESSION_TYPE determine_compression(FILE *fp);
-static int rnaf_fetch(rnaf_statep state);
-static int rnaf_load(rnaf_statep state, unsigned char *buffer, size_t bufsize, size_t *read);
-static size_t rnaf_fill(rnaf_statep state, unsigned char *buffer, size_t bufsize);
 
 static void
 init_rnafstatep(rnaf_statep state)
@@ -70,6 +65,61 @@ init_rnafstatep(rnaf_statep state)
 	state->next = NULL;
 	state->have = 0;
 	state->mutex_is_init = false;
+}
+
+static COMPRESSION_TYPE
+determine_compression(FILE *fp)
+{
+    unsigned char buffer[2];
+
+    /* Read the first two bytes of a buffer */
+    if (fread(buffer, 1, 2, fp) != 2) {
+        return PLAIN; // Could not read two bytes, assume PLAIN
+    }
+
+    /* Rewind the file pointer to the beginning */
+    fseek(fp, 0, SEEK_SET);
+
+    /* Check for GZIP signature */
+    if (buffer[0] == 0x1F && buffer[1] == 0x8B) {
+        return GZIP;
+    }
+
+    /* Check for ZLIB signature */
+    if (buffer[0] == 0x78 && (buffer[1] == 0x01 || buffer[1] == 0x5E ||
+	    buffer[1] == 0x9C || buffer[1] == 0xDA)) {
+        return ZLIB;
+    }
+
+    /* If not GZIP or ZLIB, we assume PLAIN file */
+    return PLAIN;
+}
+
+static bool
+extract_mode(rnaf_statep state, const char *mode)
+{
+	if(mode == NULL)
+		return true;
+
+	bool type_set = false;
+	do {
+		switch(*mode++) {
+		case 'a': 
+			if(type_set) return false;
+			state->type = 'a'; break; /* fasta file */
+		case 'q': 
+			if(type_set) return false;
+			state->type = 'q'; break; /* fastq file */
+		case 's':
+			if(type_set) return false;
+			state->type = 's'; break; /* sequences file */
+		case 'b':
+			if(type_set) return false;
+			state->type = 'b'; break; /* binary file*/
+		case '\0': return true;
+		default: return false;
+		}
+	} while(true);
 }
 
 static void *
@@ -125,11 +175,11 @@ rnafopen(const char *filename, const char *mode)
 #else
 		/* allocate inflate state */
 		int ret = Z_ERRNO;
-		rna_file->stream.zalloc = Z_NULL;
-		rna_file->stream.zfree = Z_NULL;
-		rna_file->stream.opaque = Z_NULL;
+		rna_file->stream.zalloc   = Z_NULL;
+		rna_file->stream.zfree    = Z_NULL;
+		rna_file->stream.opaque   = Z_NULL;
 		rna_file->stream.avail_in = 0;
-		rna_file->stream.next_in = Z_NULL;
+		rna_file->stream.next_in  = Z_NULL;
 		if(rna_file->compression == GZIP)
 			ret = inflateInit2(&rna_file->stream, 16 + MAX_WBITS);
 		else if(rna_file->compression == ZLIB)
@@ -195,6 +245,7 @@ rnafstrerror_r(int _rnaferrno, char *buffer, size_t bufsize)
 	case 4: strncpy(buffer,  "Read failed, could not determine type of file.", bufsize); break;
 	case 5: strncpy(buffer,  "Read failed, sequence is larger than input buffer.", bufsize); break;
 	case 6: strncpy(buffer,  "Out of memory.", bufsize); break;
+	case 7: strncpy(buffer,  "gets failed, sequence is larger than passed buffer.", bufsize); break;
 	default: strncpy(buffer, "Unrecognized error message.", bufsize); break;
 	}
 	return buffer;
@@ -212,32 +263,101 @@ rnafstrerror(int _rnaferrno)
 	return rnafstrerror_r(_rnaferrno, buffer, 1000);
 }
 
-/*====================================== Extract Mode Info =======================================*/
-static bool
-extract_mode(rnaf_statep state, const char *mode)
+/*==================================================================================================
+|                                         Helper Functions                                         |
+==================================================================================================*/
+static int
+rnaf_load(rnaf_statep state, unsigned char *buffer, size_t bufsize, size_t *read)
 {
-	if(mode == NULL)
-		return true;
-
-	bool type_set = false;
-	do {
-		switch(*mode++) {
-		case 'a': 
-			if(type_set) return false;
-			state->type = 'a'; break; /* fasta file */
-		case 'q': 
-			if(type_set) return false;
-			state->type = 'q'; break; /* fastq file */
-		case 's':
-			if(type_set) return false;
-			state->type = 's'; break; /* sequences file */
-		case 'b':
-			if(type_set) return false;
-			state->type = 'b'; break; /* binary file*/
-		case '\0': return true;
-		default: return false;
+	/* Process plain file */
+	if(state->compression == PLAIN) {
+		*read = fread(buffer, 1, bufsize, state->file);
+		if(*read == 0 && ferror(state->file)) {
+			rnaferrno_ = 1;
+			return 1;
 		}
-	} while(true);
+		if(*read == 0)
+			return 1;
+		return 0;
+	}
+
+	/* Process compressed file */
+	register int ret;
+	register size_t left = bufsize;
+	state->stream.next_out = buffer;
+	state->stream.avail_out = bufsize;
+
+	if(left) do {
+		/* Refill input buffer if empty */
+		if(state->stream.avail_in == 0) {
+			state->stream.avail_in = fread(state->in_buf, 1, RNAF_CHUNK, state->file);
+			if(ferror(state->file)) {
+				rnaferrno_ = 1;
+				return 1;
+			}
+			if(state->stream.avail_in == 0)
+				break;
+			state->stream.next_in = state->in_buf;
+		}
+
+		/* Decompress buffer input buffer into output */
+#if defined _IGZIP_H
+		ret = isal_inflate(&state->stream);
+		if(ret != ISAL_DECOMP_OK && ret != ISAL_END_INPUT)
+			return 2;
+		left = state->stream.avail_out;
+	} while(left && ret != ISAL_END_INPUT);
+#else
+		ret = inflate(&state->stream, Z_NO_FLUSH);
+		if(ret != Z_BUF_ERROR && ret != Z_OK && ret != Z_STREAM_END) {
+			rnaferrno_ = 1;
+			return 2;
+		}
+		left = state->stream.avail_out;
+	} while(left && ret != Z_STREAM_END);
+#endif
+	*read = bufsize - left;
+
+	return 0;
+}
+
+static int
+rnaf_fetch(rnaf_statep state)
+{
+	if(rnaf_load(state, state->out_buf, RNAF_CHUNK, &state->have) != 0)
+		return 1;
+	state->next = state->out_buf;
+	return 0;
+}
+
+static size_t
+rnaf_fill(rnaf_statep state, unsigned char *buffer, size_t bufsize)
+{
+	if(bufsize == (size_t)0)
+		return (size_t)0;
+
+	/* Declare variables */
+	register size_t left = bufsize; // decrement bufsize to guarantee fitting null terminator
+
+	/* Fill buffer with decompressed bytes */
+	if(state->have) {
+		size_t n = MIN2(left, state->have);
+		memcpy(buffer, state->out_buf, n);
+
+		/* Move pointers */
+		buffer += n;
+		state->next += n;
+		state->have -= n;
+		left -= n;
+	}
+
+	/* Fill buffer with decompressed data */
+	size_t got = 0;
+	if(rnaf_load(state, buffer, left, &got) != 0)
+		return 0;
+	left -= got;
+
+	return bufsize - left;
 }
 
 /*==================================================================================================
@@ -587,36 +707,6 @@ rnafsgets_unlocked(RnaFile file, char *buffer, size_t bufsize)
 |                                       General File Parsing                                       |
 ==================================================================================================*/
 static size_t
-rnaf_fill(rnaf_statep state, unsigned char *buffer, size_t bufsize)
-{
-	if(bufsize == (size_t)0)
-		return (size_t)0;
-
-	/* Declare variables */
-	register size_t left = bufsize; // decrement bufsize to guarantee fitting null terminator
-
-	/* Fill buffer with decompressed bytes */
-	if(state->have) {
-		size_t n = MIN2(left, state->have);
-		memcpy(buffer, state->out_buf, n);
-
-		/* Move pointers */
-		buffer += n;
-		state->next += n;
-		state->have -= n;
-		left -= n;
-	}
-
-	/* Fill buffer with decompressed data */
-	size_t got = 0;
-	if(rnaf_load(state, buffer, left, &got) != 0)
-		return 0;
-	left -= got;
-
-	return bufsize - left;
-}
-
-static size_t
 rnaf_read(rnaf_statep state, unsigned char *buffer, size_t bufsize)
 {
 	switch(state->type) {
@@ -726,96 +816,4 @@ char *
 rnafgets_unlocked(RnaFile file, char *buffer, size_t bufsize)
 {
 	return rnaf_gets((rnaf_statep)file, (unsigned char *)buffer, bufsize);
-}
-/*==================================================================================================
-|                                         Helper Functions                                         |
-==================================================================================================*/
-static int
-rnaf_fetch(rnaf_statep state)
-{
-	if(rnaf_load(state, state->out_buf, RNAF_CHUNK, &state->have) != 0)
-		return 1;
-	state->next = state->out_buf;
-	return 0;
-}
-
-static int
-rnaf_load(rnaf_statep state, unsigned char *buffer, size_t bufsize, size_t *read)
-{
-	/* Process plain file */
-	if(state->compression == PLAIN) {
-		*read = fread(buffer, 1, bufsize, state->file);
-		if(*read == 0 && ferror(state->file)) {
-			rnaferrno_ = 1;
-			return 1;
-		}
-		if(*read == 0)
-			return 1;
-		return 0;
-	}
-
-	/* Process compressed file */
-	register int ret;
-	register size_t left = bufsize;
-	state->stream.next_out = buffer;
-	state->stream.avail_out = bufsize;
-
-	if(left) do {
-		/* Refill input buffer if empty */
-		if(state->stream.avail_in == 0) {
-			state->stream.avail_in = fread(state->in_buf, 1, RNAF_CHUNK, state->file);
-			if(ferror(state->file)) {
-				rnaferrno_ = 1;
-				return 1;
-			}
-			if(state->stream.avail_in == 0)
-				break;
-			state->stream.next_in = state->in_buf;
-		}
-#if defined _IGZIP_H
-		ret = isal_inflate(&state->stream);
-		if(ret != ISAL_DECOMP_OK && ret != ISAL_END_INPUT)
-			return 2;
-		left = state->stream.avail_out;
-	} while(left && ret != ISAL_END_INPUT);
-#else
-		ret = inflate(&state->stream, Z_NO_FLUSH);
-		if(ret != Z_BUF_ERROR && ret != Z_OK && ret != Z_STREAM_END) {
-			rnaferrno_ = 1;
-			return 2;
-		}
-		left = state->stream.avail_out;
-	} while(left && ret != Z_STREAM_END);
-#endif
-	*read = bufsize - left;
-
-	return 0;
-}
-
-static COMPRESSION_TYPE
-determine_compression(FILE *fp)
-{
-    unsigned char buffer[2];
-
-    /* Read the first two bytes of a buffer */
-    if (fread(buffer, 1, 2, fp) != 2) {
-        return PLAIN; // Could not read two bytes, assume PLAIN
-    }
-
-    /* Rewind the file pointer to the beginning */
-    fseek(fp, 0, SEEK_SET);
-
-    /* Check for GZIP signature */
-    if (buffer[0] == 0x1F && buffer[1] == 0x8B) {
-        return GZIP;
-    }
-
-    /* Check for ZLIB signature */
-    if (buffer[0] == 0x78 && (buffer[1] == 0x01 || buffer[1] == 0x5E ||
-	    buffer[1] == 0x9C || buffer[1] == 0xDA)) {
-        return ZLIB;
-    }
-
-    /* If not GZIP or ZLIB, we assume PLAIN file */
-    return PLAIN;
 }
