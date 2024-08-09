@@ -383,7 +383,7 @@ rnaf_skipaheader(rnaf_statep state)
 	register unsigned char *rd;
 
 	do {
-		if(state->have == 0 && !rnaf_fetch(state))
+		if(state->have == 0 && rnaf_fetch(state) != 0)
 			return NULL;
 
 		/* reset read */
@@ -404,7 +404,7 @@ rnaf_skipaheader(rnaf_statep state)
 				n = end - rd;
 				rd = end;
 			} else {
-				if(!rnaf_fetch(state))
+				if(rnaf_fetch(state) != 0)
 					return NULL;
 				rd = start = state->out_buf;
 				n = state->have;
@@ -418,11 +418,11 @@ rnaf_skipaheader(rnaf_statep state)
 }
 
 static char *
-rnaf_agets(rnaf_statep state, unsigned char *buffer, size_t bufsize)\
+rnaf_agets(rnaf_statep state, unsigned char *buffer, size_t bufsize)
 {
 	/* Skip header information, in other words find the start of next sequence */
 	if(rnaf_skipaheader(state) == NULL)
-		return 0;
+		return NULL;
 
 	/* Declare variables */
 	register unsigned char *eos;
@@ -749,6 +749,8 @@ rnaf_load(rnaf_statep state, unsigned char *buffer, size_t bufsize, size_t *read
 			rnaferrno_ = 1;
 			return 1;
 		}
+		if(*read == 0)
+			return 1;
 		return 0;
 	}
 
