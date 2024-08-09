@@ -1,0 +1,100 @@
+package "kstruct - K-mer Structure Analysis"
+
+purpose "A method for finding the average base-pair probability of all kmers in\
+ dataset"
+
+usage "kstruct [OPTIONS] [<input.fa>] [<bound.fa>]"
+
+version "1.0"
+
+args "--file-name=kstruct_cmdl --include-getopt --default-optional --unamed-opts --func-name=kstruct_cmdline_parser --arg-struct-name=kstruct_args_info"
+
+description "The Base-Pair Probability Pipeline is a C program designed to\
+ analyze RNA sequences and identify enriched base-pair interactions in \
+ protein-bound RNA. It follows a structured pipeline that includes RNA folding,\
+ k-mer counting, and enrichment analysis, producing a CSV file with ranked\
+ k-mers based on their likelihood of being bound or unbound."
+
+
+section "I/O Options"
+sectiondesc="Command line options for input and output processing.\n\n"
+
+option "test" t
+"Read the protein bound RNA sequences file."
+details="Specify which file you want to be the test sequences. Note that you\
+ can only pass one test file in the command.\n"
+string
+typestr="filename"
+optional
+
+option "control" c
+"Read the controls sequences file."
+details="Specify which file you want to be the control sequences. Note that you\
+ can only pass one control file in the command.\n"
+string
+typestr="filename"
+optional
+
+option "output" o
+"Set the name of the output files."
+details="Specify the default name for the output file. If this option is not\
+ used, the default name is \"motif\".\n"
+string
+default="rna"
+typestr="filename"
+optional
+
+option "kmer" k
+"Set the length of k-mers."
+details="Specify the length of the k-mers you want to perform the enrichment\
+ analysis on.\n"
+int
+default="5"
+optional
+
+option "threads" -
+"Set the number of threads to use in ikke. This allows to process calculations\
+ in parallel using multiple threads."
+details="By default, processing of the test and control files is computed\
+ serially. Specifying this options allows for parallelization of the\
+ computations. Though, this not only increases memory consumption as each\
+ thread requires storing sequences, but it is possible to that it can provide\
+ incorrect counts or even fail when the files have long sequences (>16000nt).\
+ In other words, if you have long sequences in your file, it is not recommended\
+ to turn on threads.\n"
+int
+default="1"
+optional
+
+option "delimiter" d
+"Set the delimiter used to separate the values in the output file."
+details="The output of ikke is by default in CSV format, meaning the values are \
+comma-delimited. By specifying this option, you can change the delimiter used \
+to separate the values. The available delimiters are: comma (,), tab (t), \
+colon (:), vertical bar (|), and space (\" \"). For example, setting \
+`--delimiter=\" \"` will change the delimiter to be space-delimited. If \
+using the comma delimiter, the file extension will be \".csv\"; if using the \
+tab delimiter, the file extension will be \".tsv\"; otherwise, the extension \
+will be \".dsv\". Support for other delimiters is currently unavailable.\n"
+string
+typestr="char"
+default=","
+optional
+
+section "Algorithms"
+sectiondesc="Select additional algorithms to determine the calculations.\n\n"
+
+option "seq-windows" w
+"Split the sequence into sliding windows of the specified size and find the\
+ mean probability per position in the window."
+details="If this option is provided, each sequence will be iterated by creating\
+ sliding windows of the provided size. For example, if the sequence \
+ is:\n\tAGCUUCGA\nThen, the sliding windows of size 5 would be:\n\tAGCUU\n\t\
+ GCUUC\n\t  CUUCG\n\t   UUCGA\nThe pipeline will then find the base pair\
+ probability of each window. After which, the mean probability of each aligned\
+ nucleotide across the windows will be used as the base pair probability for\
+ each nucleotide in the sequence.\n"
+int
+default="20"
+argoptional
+optional
