@@ -181,16 +181,10 @@ print_table_to_file(kmerHashTable *table, FILE *table_file, char sep)
 void
 kmerHashTable_to_file(kmerHashTable *table, char *name, char file_delimiter)
 {
-	char *filename = concat(name, ".dsv");
-
-	FILE *table_file = fopen(filename, "w");
-	if (table_file == NULL) {
-		error_message("Could not write to file '%s'\n",filename);
-	}
-
+	FILE *table_file = fopen(name, "w");
+	if (table_file == NULL)
+		error_message("Could not write to file '%s'\n", name);
 	print_table_to_file(table, table_file, file_delimiter);
-
-	free(filename);
 	fclose(table_file);
 }
 
