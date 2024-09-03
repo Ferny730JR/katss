@@ -47,6 +47,8 @@ struct rnaf_state {
 
 	mtx_t mutex;                   /** Mutex for thread safe functions */
 	bool mutex_is_init;            /** Check if mutex is initialized (for rnafclose) */
+
+	bool eof;                      /** Flag to test if at end of rnafile */
 };
 
 typedef struct rnaf_state *rnaf_statep;
@@ -65,6 +67,7 @@ init_rnafstatep(rnaf_statep state)
 	state->next = NULL;
 	state->have = 0;
 	state->mutex_is_init = false;
+	state->eof = false;
 }
 
 static COMPRESSION_TYPE
@@ -225,7 +228,7 @@ rnafclose(RnaFile file)
 bool
 rnafeof(RnaFile file)
 {
-	return (bool)feof(((rnaf_statep)file)->file);
+	return ((rnaf_statep)file)->eof;
 }
 
 int
@@ -277,7 +280,7 @@ rnaf_load(rnaf_statep state, unsigned char *buffer, size_t bufsize, size_t *read
 			return 1;
 		}
 		if(*read == 0)
-			return 1;
+			state->eof = true;
 		return 0;
 	}
 
@@ -295,8 +298,10 @@ rnaf_load(rnaf_statep state, unsigned char *buffer, size_t bufsize, size_t *read
 				rnaferrno_ = 1;
 				return 1;
 			}
-			if(state->stream.avail_in == 0)
+			if(state->stream.avail_in == 0) {
+				state->eof = true;
 				break;
+			}
 			state->stream.next_in = state->in_buf;
 		}
 
@@ -504,7 +509,9 @@ rnaf_skipaheader(rnaf_statep state)
 
 	do {
 		if(state->have == 0 && rnaf_fetch(state) != 0)
-			return NULL;
+			return NULL; // error encountered 
+		if(state->have == 0)
+			return NULL; // Nothing left to read, couldn't find header
 
 		/* reset read */
 		rd = state->next;
@@ -525,7 +532,9 @@ rnaf_skipaheader(rnaf_statep state)
 				rd = end;
 			} else {
 				if(rnaf_fetch(state) != 0)
-					return NULL;
+					return NULL; // error in fetch
+				if(state->have == 0)
+					return NULL; // Nothing left to read, end was not found
 				rd = start = state->out_buf;
 				n = state->have;
 			}
@@ -650,7 +659,7 @@ rnaf_sgets(rnaf_statep state, unsigned char *buffer, size_t bufsize)
 	/* Sanity checks */
 	if(state == NULL || buffer == NULL || bufsize == 0)
 		return NULL;
-	if(feof(state->file))
+	if(state->eof)
 		return NULL;
 
 	/* Declare variables */
@@ -753,7 +762,7 @@ rnaf_line(rnaf_statep state, unsigned char *buffer, size_t bufsize)
 	/* Sanity checks */
 	if(state == NULL || buffer == NULL || bufsize == 0)
 		return NULL;
-	if(feof(state->file)) //TODO: feof returns true even if there are bytes in internal buffer
+	if(state->eof)
 		return NULL;
 
 	/* Declare variables */
@@ -780,8 +789,7 @@ rnaf_line(rnaf_statep state, unsigned char *buffer, size_t bufsize)
 		state->have -= n;
 		state->next += n;
 	} while(left && eol == NULL);
-	if(str == buffer) /* Nothing was written, return NULL */
-		return NULL;
+
 	buffer[0] = '\0';
 	return (char *)str;
 }
