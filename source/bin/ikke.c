@@ -191,6 +191,10 @@ process_bootstrap(Options *opts)
 		error_message("Bootstrap not enabled, even though it appeared that it was.");
 		return;
 	}
+	if(!opts->enrichments) {
+		error_message("Bootstrap currently does not support ikke. Add the '-R' option instead.");
+		return;
+	}
 
 	/* Declare bootstrap and its options */
 	KatssBootstrap *bootstrap;
@@ -205,7 +209,7 @@ process_bootstrap(Options *opts)
 	bootstrap_opts.probabilistic = opts->probabilistic;
 	bootstrap_opts.sample        = opts->sample;
 	bootstrap_opts.threads       = opts->threads;
-	
+
 	/* Process bootstrap */
 	bootstrap = katss_bootstrap(opts->test_file, opts->ctrl_file, &bootstrap_opts);
 	if(bootstrap == NULL)
