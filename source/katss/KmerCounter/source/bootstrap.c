@@ -267,7 +267,8 @@ katss_bootstrap(const char *test_file, const char *ctrl_file, KatssOptions *opts
 		bootstrap->data[i].stdev = sqrt(bootstrap->data[i].stdev / (opts->bs_iters - 1));
 	}
 
-	qsort(bootstrap->data, bootstrap->total, sizeof *bootstrap->data, bootstrap_compare);
+	if(bootstrap != NULL)
+		qsort(bootstrap->data, bootstrap->total, sizeof *bootstrap->data, bootstrap_compare);
 
 	if(!options_passed)
 		free(opts);
