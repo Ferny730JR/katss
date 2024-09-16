@@ -603,55 +603,10 @@ rnafaread_unlocked(RnaFile file, char *buffer, size_t bufsize)
 }
 
 static char *
-rnaf_skipaheader(rnaf_statep state)
-{
-	register bool found = false, newline = false;
-	register unsigned char *rd;
-
-	do {
-		if(state->have == 0 && rnaf_fetch(state) != 0)
-			return NULL; // error encountered 
-		if(state->have == 0)
-			return NULL; // Nothing left to read, couldn't find header
-
-		/* reset read */
-		rd = state->next;
-
-		/* Find the start of fasta header */
-		int n = state->have;
-		unsigned char *start = memchr(rd, '>', n);
-
-		/* If header found, find end of header */
-		if(start) do {
-			found = true;
-			n = n - (start - rd);
-			unsigned char *end = memchr(start, '\n', n);
-			if(end) {
-				newline = true;
-				end++;
-				n = end - rd;
-				rd = end;
-			} else {
-				if(rnaf_fetch(state) != 0)
-					return NULL; // error in fetch
-				if(state->have == 0)
-					return NULL; // Nothing left to read, end was not found
-				rd = start = state->out_buf;
-				n = state->have;
-			}
-		} while(!newline);
-		state->have -= n;
-	} while(!found);
-
-	state->next = rd;
-	return (char *)rd;
-}
-
-static char *
 rnaf_agets(rnaf_statep state, unsigned char *buffer, size_t bufsize)
 {
 	/* Skip header information, in other words find the start of next sequence */
-	if(rnaf_skipaheader(state) == NULL)
+	if(rnaf_skipheader(state, '>') == NULL)
 		return NULL;
 
 	/* Declare variables */
