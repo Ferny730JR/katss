@@ -152,7 +152,6 @@ rnafopen(const char *filename, const char *mode)
 		return error_rnafopen(rna_file, 1);
 
 	/* Initialize mutex */
-	rna_file->mutex_is_init = false;
 	if(mtx_init(&rna_file->mutex, mtx_plain) != thrd_success) 
 		return error_rnafopen(rna_file, 2);
 	rna_file->mutex_is_init = true;
@@ -257,13 +256,13 @@ rnafstrerror_r(int _rnaferrno, char *buffer, size_t bufsize)
 char *
 rnafstrerror(int _rnaferrno)
 {
-	char *buffer = malloc(1000);
+	char *buffer = malloc(100);
 	if(buffer == NULL) {
 		rnaferrno_ = 6;
 		return NULL;
 	}
 
-	return rnafstrerror_r(_rnaferrno, buffer, 1000);
+	return rnafstrerror_r(_rnaferrno, buffer, 100);
 }
 
 /*==================================================================================================
@@ -365,6 +364,64 @@ rnaf_fill(rnaf_statep state, unsigned char *buffer, size_t bufsize)
 	return bufsize - left;
 }
 
+static unsigned char *
+rnaf_skipheader(rnaf_statep state, char skip)
+{
+	size_t n;
+	unsigned char *end;
+	char find = skip;
+	char found_skp = false;
+	char found_eol = false;
+	do {
+		if(state->have == 0 && rnaf_fetch(state) != 0)
+			return NULL;
+		if(state->have == 0)
+			return NULL;
+		
+		/* Try and skip */
+		n = state->have;
+		end = memchr(state->next, find, n);
+		if(end != NULL) {
+			n = (size_t)(end - state->next + 1);
+			if(!found_skp) {
+				find = '\n';
+				found_skp = true;
+			} else {
+				found_eol = true;
+			}
+		}
+
+		state->have -= n;
+		state->next += n;
+	} while(!found_eol);
+	return state->next;
+}
+
+static unsigned char *
+rnaf_skipline(rnaf_statep state)
+{
+	size_t n;
+	unsigned char *eol;
+	do {
+		/* Check if bytes available in internal buffer, fetch if none */
+		if(state->have == 0 && rnaf_fetch(state) != 0)
+			return NULL;
+		if(state->have == 0)
+			return NULL;
+
+		/* Try and skip to the end of the line */
+		n = state->have;
+		eol = memchr(state->next, '\n', n);
+		if(eol != NULL)
+			n = (size_t)(eol - state->next + 1);
+
+		/* Move internal pointers */
+		state->have -= n;
+		state->next += n;
+	} while(eol == NULL);
+	return state->next;
+}
+
 /*==================================================================================================
 |                                        FASTQ File Parsing                                        |
 ==================================================================================================*/
@@ -431,7 +488,51 @@ rnafqread_unlocked(RnaFile file, char *buffer, size_t bufsize)
 static char *
 rnaf_qgets(rnaf_statep state, unsigned char *buffer, size_t bufsize)
 {
-	return NULL; // todo: implement qgets
+	if(state == NULL || buffer == NULL || bufsize == 0)
+		return NULL;
+	if(state->eof)
+		return NULL;
+	
+	/* Find start of next sequence */
+	if(rnaf_skipheader(state, '@') == NULL)
+		return NULL;
+
+	/* Declare variables */
+	register unsigned char *eos;
+	register char *str = (char *)buffer;
+	register size_t n, left = bufsize - 1;
+
+	/* Fill buffer with fastq sequence */
+	if(left) do {
+		if(state->have == 0 && rnaf_fetch(state) != 0)
+			return NULL; // error in rnaf_fetch
+		if(state->have == 0 || *state->next == '+')
+			break;
+
+		/* Look for end of line in internal buffer */
+		n = MIN2(state->have, left);
+		eos = (unsigned char *)memchr(state->next, '\n', n);
+		if(eos != NULL)
+			n = (size_t)(eos - state->next);
+
+		/* Copy to end of seq, DONT include newline */
+		memcpy(buffer, state->next, n);
+		left -= n;
+		buffer += n;
+
+		/* Skip past newline if found */
+		if(eos != NULL)
+			n++;
+		state->have -= n;
+		state->next += n;
+	} while(left);
+
+	rnaf_skipline(state); /* Skip '+' line */
+	rnaf_skipline(state); /* Skip quality scores */
+
+	/* Null terminate and return str */
+	buffer[0] = '\0';
+	return str;
 }
 
 char *
