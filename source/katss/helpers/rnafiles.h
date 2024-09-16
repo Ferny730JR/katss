@@ -64,7 +64,7 @@ bool rnafeof(RnaFile file);
 /**
  * @brief Return an allocated string detailing the error encountered from RnaFile
  * 
- * @param rnaferrno_ The rnaferrno variable
+ * @param _rnaferrno The rnaferrno variable
  * @return char* String with error description
  * 
  * @note It is necessary to free the string returned from this function as memory is
@@ -160,6 +160,8 @@ char *rnafagets(RnaFile file, char *buffer, size_t bufsize);
 char *rnafagets_unlocked(RnaFile file, char *buffer, size_t bufsize);
 char *rnafsgets(RnaFile file, char *buffer, size_t bufsize);
 char *rnafsgets_unlocked(RnaFile file, char *buffer, size_t bufsize);
+char *rnafqgets(RnaFile file, char *buffer, size_t bufsize);
+char *rnafqgets_unlocked(RnaFile file, char *buffer, size_t bufsize);
 
 #ifdef __cplusplus
 }
