@@ -1,17 +1,31 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <pthread.h>
 
-#include "bpp_tables.h"
 #include "memory_utils.h"
 #include "string_utils.h"
+
+#if (__STDC_NO_THREADS__)
+#  include "tinycthread.h"
+#else
+#  include <threads.h>
+#endif
+
+#include "bpp_tables.h"
 
 typedef struct Hash {
 	unsigned int hash;
 	unsigned int errno;
 } Hash;
 
+struct kht_state {
+	unsigned long   capacity;
+	unsigned int    cols;
+	unsigned int    kmer;
+	Entry           **entries;
+	mtx_t           lock;
+};
+typedef struct kht_state *kht_statep;
 
 static Entry *
 create_entry(unsigned int key, unsigned int col);
@@ -27,19 +41,19 @@ kmerHashTable *
 init_kmer_table(unsigned int kmer, unsigned int cols)
 {
 	unsigned long table_size = 1 << (2 * kmer); // 4^kmer
-	kmerHashTable *hash_table = s_malloc(sizeof *hash_table);
+	kht_statep hash_table = s_malloc(sizeof *hash_table);
 
 	hash_table->capacity = table_size;
 	hash_table->cols = cols;
 	hash_table->kmer = kmer;
 	hash_table->entries = s_malloc(table_size * sizeof(Entry*));
-	pthread_mutex_init(&hash_table->lock, NULL);
+	mtx_init(&hash_table->lock, mtx_plain);
 
 	for (unsigned long i = 0; i < table_size; i++) {
 		hash_table->entries[i] = NULL;
 	}
 
-	return hash_table;
+	return (kmerHashTable *)hash_table;
 }
 
 
@@ -60,9 +74,9 @@ kmer_get(kmerHashTable *hash_table, const char *key)
 
 void
 kmer_add_value(kmerHashTable   *hash_table, 
-                    const char      *key, 
-                    double          value, 
-                    unsigned int    value_index)
+               const char      *key, 
+               double          value, 
+               unsigned int    value_index)
 {
 	if(value_index >= hash_table->cols) {
 		error_message("value_index '%d' is greater than length of value array, which is '%d'.",
@@ -75,14 +89,14 @@ kmer_add_value(kmerHashTable   *hash_table,
 		return;
 	}
 
-	pthread_mutex_lock(&hash_table->lock);
+	mtx_lock(&((kht_statep)hash_table)->lock);
 	if(hash_table->entries[hash_value.hash] == NULL) { // make new entry if not initialized
 		Entry *new_item = create_entry(hash_value.hash, hash_table->cols);
 		hash_table->entries[hash_value.hash] = new_item;
 	}
 
 	hash_table->entries[hash_value.hash]->values[value_index] += value;
-	pthread_mutex_unlock(&hash_table->lock);
+	mtx_unlock(&((kht_statep)hash_table)->lock);
 }
 
 
@@ -130,14 +144,17 @@ free_entry(Entry *entry)
 void
 free_kmer_table(kmerHashTable *hash_table)
 {
-	for (size_t i = 0; i < hash_table->capacity; i++) {
-		if(hash_table->entries[i]) {
-			free_entry(hash_table->entries[i]);
-		}
-	}
-	pthread_mutex_destroy(&hash_table->lock);
-	free(hash_table->entries);
-	free(hash_table);
+	if(hash_table == NULL)
+		return;
+	kht_statep state = (kht_statep)hash_table;
+
+	for(size_t i=0; i<state->capacity; i++)
+		if(state->entries[i])
+			free_entry(state->entries[i]);
+
+	mtx_destroy(&state->lock);
+	free(state->entries);
+	free(state);
 }
 
 

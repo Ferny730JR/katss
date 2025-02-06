@@ -2,7 +2,6 @@
 #define BPP_TABLES_H
 
 #include <stddef.h>
-#include <pthread.h>
 
 /**
  *  @brief Entries for kmerHashTable data structure. Stores the key value pair, where key is a 
@@ -18,13 +17,13 @@ typedef struct {
 /**
  *  @brief Hash table data structure to store kmer's and associated information.
 */
-typedef struct {
+struct kmerHashTable {
 	unsigned long   capacity;
 	unsigned int    cols;
 	unsigned int    kmer;
 	Entry           **entries;
-	pthread_mutex_t lock;
-} kmerHashTable;
+};
+typedef struct kmerHashTable kmerHashTable;
 
 
 /**
