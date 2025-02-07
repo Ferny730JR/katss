@@ -6,5 +6,6 @@ set(TINYCTHREAD_INSTALL OFF CACHE BOOL "Install a static library for TinyCThread
 if(NOT HAVE_C11_THREADS)
 	add_subdirectory(tinycthread)
 endif()
+add_subdirectory(seqfile)
 add_subdirectory(katss)
 add_subdirectory(bin)

@@ -4,7 +4,11 @@ set(STRUCTURE_SOURCE_FILES
 
 add_library(katss_structure STATIC ${STRUCTURE_SOURCE_FILES})
 target_include_directories(katss_structure PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(katss_structure PRIVATE KATSS_MEMORYUTILS KATSS_RNAFILES KATSS_STRING ${THREAD_LIB})
+target_link_libraries(katss_structure PRIVATE 
+	KATSS_MEMORYUTILS
+	KATSS_STRING
+	seqf_static
+	${THREAD_LIB})
 
 # Find ViennaRNA library
 find_library(LIBRARY_VRNA 

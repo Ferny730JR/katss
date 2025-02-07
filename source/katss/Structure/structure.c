@@ -4,7 +4,7 @@
 #include <ViennaRNA/fold.h>
 #include <ViennaRNA/part_func.h>
 
-#include "rnafiles.h"
+#include "seqfile.h"
 #include "memory_utils.h"
 #include "bpp_tables.h"
 #include "structure.h"
@@ -26,7 +26,7 @@ struct record_data {
 	char *sequence;
 	kmerHashTable *counts_table;
 	BppOptions *opts;
-	RnaFile read_file;
+	SeqFile read_file;
 };
 
 typedef struct record_data record_data;
@@ -53,13 +53,11 @@ is_nucleotide(char character)
 static char
 determine_filetype(const char *file)
 {
-	/* Open the RnaFile, return 'e' upon error */
-	RnaFile reads_file = rnafopen(file, "b");
+	/* Open the SeqFile, return 'e' upon error */
+	SeqFile reads_file = seqfopen(file, "b");
 	if(reads_file == NULL) {
-		char errbuf[1000];
-		rnafstrerror_r(rnaferrno, errbuf, sizeof(errbuf));
-		error_message("katss: %s: %s\n", file, errbuf);
-		rnafclose(reads_file);
+		error_message("katss: %s: %s\n", file, seqfstrerror(seqferrno));
+		seqfclose(reads_file);
 		return 'N';
 	}
 
@@ -69,7 +67,7 @@ determine_filetype(const char *file)
 	int fasta_score_lines = 0;
 	int sequence_lines = 0;
 
-	while (rnafgets(reads_file, buffer, BUFFER_SIZE) != NULL && lines_read < 10) {
+	while(seqfgets(reads_file, buffer, BUFFER_SIZE) != NULL && lines_read < 10) {
 		lines_read++;
 		char first_char = buffer[0];
 
@@ -100,7 +98,7 @@ determine_filetype(const char *file)
 			}
 		}
 	}
-    rnafclose(reads_file);
+    seqfclose(reads_file);
 
     if (fastq_score_lines >= 2) {
         return 'q'; // fastq file
@@ -115,14 +113,14 @@ determine_filetype(const char *file)
     }
 }
 
-static RnaFile
-rnafopen_detect(const char *filename)
+static SeqFile
+seqfopen_detect(const char *filename)
 {
 	char filetype = determine_filetype(filename);
 	if(filetype == 'N' || filetype == 'e')
 		return NULL;
 	char mode[2] = {filetype, '\0'};
-	return rnafopen(filename, mode);
+	return seqfopen(filename, mode);
 }
 
 static float *
@@ -164,7 +162,7 @@ process_sequence(record_data *record)
 		char tmp = *(sequence+shift);
 		*(sequence+shift) = '\0'; // terminate the string to k-mer length
 
-		kmer_add_value(record->counts_table, sequence+i, 1, opts->kmer);		
+		kmer_add_value(record->counts_table, sequence+i, 1, opts->kmer);
 		/* Loop through bpp values in file */
 		for(int j=i; j<opts->kmer+i; j++) {
 			kmer_add_value(record->counts_table, sequence+i, positional_probabilities[j], j-i);
@@ -178,8 +176,8 @@ process_sequence(record_data *record)
 void
 process_windows(record_data *record)
 {
-	char       *sequence  = record->sequence;
-	BppOptions *opts       = record->opts;
+	char       *sequence = record->sequence;
+	BppOptions *opts     = record->opts;
 	kmerHashTable *counts_table = record->counts_table;
 
 	char    *window_seq;
@@ -198,11 +196,11 @@ process_windows(record_data *record)
 	}
 
 	/* Initialize probability matrix with -1 */
-	float probability_matrix[num_windows][seq_length];
-	for(int row=0; row<num_windows; row++){
-		for(int col=0; col<seq_length; col++) {
-			probability_matrix[row][col]=-1;
-		}
+	float **probability_matrix = s_malloc(num_windows * sizeof *probability_matrix);
+	for(int row=0; row<num_windows; row++) {
+		probability_matrix[row] = s_malloc(seq_length * sizeof **probability_matrix);
+		for(int col=0; col<seq_length; col++)
+			probability_matrix[row][col] = -1.0F;
 	}
 
 	/* Fill the probability matrix with probabilities */
@@ -224,14 +222,14 @@ process_windows(record_data *record)
 		free(window_probabilities);
 	}
 
-	// Get the average of each column in probability matrix
-	float positional_probabilities[seq_length];
+	/* Get the average of each column in probability matrix */
+	float *positional_probabilities = s_malloc(seq_length * sizeof *positional_probabilities);
 	for(int col=0; col<seq_length; col++) {
 		sum_probability = 0;
 		count_probs     = 0;
 
 		for(int row=0; row<num_windows; row++) {
-			if(probability_matrix[row][col] == -1) {
+			if(probability_matrix[row][col] == -1.0F) {
 				continue;
 			}
 			sum_probability+=probability_matrix[row][col];
@@ -241,6 +239,11 @@ process_windows(record_data *record)
 		mean_probability = sum_probability/count_probs;
 		positional_probabilities[col] = mean_probability;
 	}
+
+	/* Free the probability matrix; we're done using it */
+	for(int i=0; i<num_windows; i++)
+		free(probability_matrix[i]);
+	free(probability_matrix);
 
 	/* Fill counts_table with positional probabilities */
 	int num_kmers_in_seq = seq_length - opts->kmer + 1;
@@ -254,6 +257,8 @@ process_windows(record_data *record)
 		}
 		*(sequence + shift) = tmp;
 	}
+
+	free(positional_probabilities);
 }
 
 static void
@@ -277,7 +282,7 @@ bpp_kmer_count(void *arg)
 
 	record->sequence = sequence;
 	while(true) {
-		if(rnafgets(record->read_file, sequence, BUFFER_SIZE) == NULL)
+		if(seqfgets(record->read_file, sequence, BUFFER_SIZE) == NULL)
 			break;
 		clean_seq(sequence, true);
 		process_record(record);
@@ -290,9 +295,9 @@ static kmerHashTable *
 bpp_kmer_frequency(const char *filename, BppOptions *opts)
 {
 	kmerHashTable   *counts_table;
-	RnaFile         read_file;
+	SeqFile         read_file;
 
-	read_file    = rnafopen_detect(filename);
+	read_file    = seqfopen_detect(filename);
 	if(read_file == NULL)
 		return NULL;
 	counts_table = init_bpp_table(opts->kmer);
@@ -324,7 +329,7 @@ bpp_kmer_frequency(const char *filename, BppOptions *opts)
 		free(record);
 	}
 
-	rnafclose(read_file);
+	seqfclose(read_file);
 
 	/* Calculate the frequencies */
 	int num_columns = counts_table->cols-1;
