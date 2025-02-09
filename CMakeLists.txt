@@ -12,6 +12,7 @@ endif()
 
 set(CMAKE_C_STANDARD 11)
 
+# Check if C11 threads is supported, otherwise find any thread functionality
 include(CheckIncludeFile)
 CHECK_INCLUDE_FILE(threads.h HAVE_C11_THREADS)
 if(NOT HAVE_C11_THREADS)
@@ -21,6 +22,10 @@ else()
 	set(THREAD_LIB Threads::Threads)
 endif()
 
+# Find if OpenMP is supported
+find_package(OpenMP)
+
+# Check for IPO optimizations
 include(CheckIPOSupported)
 check_ipo_supported(RESULT ipo_is_supported OUTPUT ipo_error)
 if(ipo_is_supported)
