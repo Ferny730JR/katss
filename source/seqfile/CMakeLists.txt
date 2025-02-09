@@ -33,27 +33,30 @@ endif()
 set(INSTALL_LIB_DIR "${CMAKE_INSTALL_PREFIX}/lib" CACHE PATH "Installation directory for libraries")
 set(INSTALL_INC_DIR "${CMAKE_INSTALL_PREFIX}/include" CACHE PATH "Installation directory for headers")
 
-option(SKIP_INSTALL_ALL "Don't install any targets" OFF)
-option(SKIP_INSTALL_LIBRARIES "Don't install shared and static libraries" OFF)
-option(SKIP_INSTALL_STATIC "Don't install static library" OFF)
-option(SKIP_INSTALL_SHARED "Don't install shared library" OFF)
-option(SKIP_INSTALL_HEADER "Don't install header files" OFF)
+# SeqFile user configuration files
+option(SEQF_BUILD_SHARED "Build shared SeqFile library" ON)
+option(SEQF_BUILD_STATIC "Build static SeqFile library" ON)
+option(SEQF_SKIP_INSTALL_ALL "Don't install any targets" OFF)
+option(SEQF_SKIP_INSTALL_LIBRARIES "Don't install shared and static libraries" OFF)
+option(SEQF_SKIP_INSTALL_STATIC "Don't install static library" OFF)
+option(SEQF_SKIP_INSTALL_SHARED "Don't install shared library" OFF)
+option(SEQF_SKIP_INSTALL_HEADER "Don't install header files" OFF)
 
 # Find compression library
 message(CHECK_START "Finding ISA-L")
 find_library(COMPRESSION_LIB
 	NAMES isal
 	PATHS "/usr/lib"
-		  "/usr/lib64"
-		  "/usr/local/lib"
-		  "/usr/local/lib64"
-		  "$ENV{HOME}/.local/lib"
-		  "$ENV{HOME}/.local/lib64")
+	      "/usr/lib64"
+	      "/usr/local/lib"
+	      "/usr/local/lib64"
+	      "$ENV{HOME}/.local/lib"
+	      "$ENV{HOME}/.local/lib64")
 find_path(COMPRESSION_INC
 	NAMES igzip_lib.h
 	PATHS "$ENV{HOME}/.local/include"
 	      "/usr/include"
-		  "/usr/local/include")
+	      "/usr/local/include")
 if(COMPRESSION_LIB AND COMPRESSION_INC)
 	set(SEQF_HAS_ISA_L TRUE)
 	message(CHECK_PASS "found: " ${COMPRESSION_LIB})
@@ -73,15 +76,15 @@ add_subdirectory(source)
 add_subdirectory(test)
 
 # Install the library 
-if(NOT SKIP_INSTALL_LIBRARIES AND NOT SKIP_INSTALL_ALL)
-	if(NOT SKIP_INSTALL_STATIC)
+if(NOT SEQF_SKIP_INSTALL_LIBRARIES AND NOT SEQF_SKIP_INSTALL_ALL)
+	if(NOT SEQF_SKIP_INSTALL_STATIC AND SEQF_BUILD_STATIC)
 		install(TARGETS seqf_static LIBRARY DESTINATION ${INSTALL_LIB_DIR})
 	endif()
-	if(NOT SKIP_INSTALL_SHARED)
+	if(NOT SEQF_SKIP_INSTALL_SHARED AND SEQF_BUILD_SHARED)
 		install(TARGETS seqf_shared LIBRARY DESTINATION ${INSTALL_LIB_DIR})
 	endif()
 endif()
 
-if(NOT SKIP_INSTALL_HEADER AND NOT SKIP_INSTALL_ALL)
+if(NOT SEQF_SKIP_INSTALL_HEADER AND NOT SEQF_SKIP_INSTALL_ALL)
 	install(FILES ${SEQF_PUBLIC_HEADERS} DESTINATION ${INSTALL_INC_DIR})
 endif()
