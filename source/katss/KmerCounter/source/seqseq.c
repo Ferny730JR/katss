@@ -349,20 +349,19 @@ seqncmp(const unsigned char *seq, const unsigned char *pat, size_t len)
  * `seq`.
  * 
  * This function determines if `seq` string begins with the `pat` string.
- * Moves the sequence pointer while comparing. Used to maintain linear 
- * performance in seqseq functions.
+ * Assumes that both `seq` and `pat` are null terminated strings.
  * 
  * @param seq Sequence that is being searched
  * @param pat Pattern to check if it begin in `seq`
  * @return int `0` if seq does not begin with pat. `1` if `seq` begins with
- * `pat`. `-1` if end of `seq` is reached
+ * `pat`.
  */
 static inline int
 seqcmpa(const char *seq, const char *pat)
 {
 	while(*pat) {
 		if(*seq == '\0')
-			return -1;
+			return 0;
 		if(*seq == '\n') {
 			seq++;
 			continue;
