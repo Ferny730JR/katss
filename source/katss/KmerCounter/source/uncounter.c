@@ -4,7 +4,7 @@
 
 #include "katss_core.h"
 #include "counter.h"
-#include "rnafiles.h"
+#include "seqfile.h"
 #include "hash_functions.h"
 #include "memory_utils.h"
 #include "seqseq.h"
@@ -17,11 +17,11 @@ struct DecrementValues {
 };
 
 struct threadinfo {
-	RnaFile file;
+	SeqFile file;
 	KatssCounter *counter;
 	char *kmer;
 	char *(*find)(const char *, const char *);
-	size_t(*read)(RnaFile, char *, size_t);
+	size_t(*read)(SeqFile, char *, size_t);
 	char *(*proc)(KatssCounter *, char *, const char *);
 };
 
@@ -105,14 +105,12 @@ katss_uncount_kmer_mt(KatssCounter *counter, const char *filename, const char *k
 	int previous_total;
 	katss_get(counter, KATSS_INT32, &previous_total, kmer);
 
-	/* Open RnaFile for reading */
+	/* Open SeqFile for reading */
 	char mode[2] = { 0 };
 	mode[0] = filetype;
-	RnaFile file = rnafopen(filename, mode);
+	SeqFile file = seqfopen(filename, mode);
 	if(file == NULL) {
-		char *error = rnafstrerror(rnaferrno);
-		warning_message("rnafopen: error %d: %s",rnaferrno,error);
-		free(error);
+		warning_message("seqfopen: error %d: %s",seqferrno,seqfstrerror(seqferrno));
 		return -1;
 	}
 
@@ -126,22 +124,22 @@ katss_uncount_kmer_mt(KatssCounter *counter, const char *filename, const char *k
 		jobarg[i].kmer = (char *)kmer;
 		switch(filetype) {
 		case 'a': 
-			jobarg[i].read = rnafaread;
+			jobarg[i].read = seqfaread;
 			jobarg[i].find = seqlseqa;
 			jobarg[i].proc = process_line_fasta;
 			break;
 		case 'q':
-			jobarg[i].read = rnafqread;
+			jobarg[i].read = seqfqread;
 			jobarg[i].find = seqlseqq;
 			jobarg[i].proc = process_line;
 			break;
 		case 's':
-			jobarg[i].read = rnafsread;
+			jobarg[i].read = seqfsread;
 			jobarg[i].find = seqlseq;
 			jobarg[i].proc = process_line;
 			break;
 		default:
-			rnafclose(file);
+			seqfclose(file);
 			free(jobarg);
 			free(jobs);
 			return -1;
@@ -157,7 +155,7 @@ katss_uncount_kmer_mt(KatssCounter *counter, const char *filename, const char *k
 	}
 
 	/* Free allocated resources */
-	rnafclose(file);
+	seqfclose(file);
 	free(jobarg);
 	free(jobs);
 
@@ -173,19 +171,18 @@ katss_uncount_kmer_mt(KatssCounter *counter, const char *filename, const char *k
 ==================================================================================================*/
 static int
 uncount_kmer_fasta(KatssCounter *counter, const char *filename, const char *kmer) {
-	RnaFile rnafile = rnafopen(filename, "a");
-	if(rnafile == NULL) {
-		char *error = rnafstrerror(rnaferrno);
-		error_message("rnafopen: %s", error);
-		free(error);
+	SeqFile seqfile = seqfopen(filename, "a");
+	if(seqfile == NULL) {
+		error_message("seqfopen: %s", seqfstrerror(seqferrno));
+		return -1;
 	}
 
 	uint64_t previous_total = counter->total;
 	char buffer[BUFFER_SIZE] = { 0 };
-	while(rnafagets_unlocked(rnafile, buffer, BUFFER_SIZE)) {
+	while(seqfagets_unlocked(seqfile, buffer, BUFFER_SIZE)) {
 		process_line(counter, buffer, kmer);
 	}
-	rnafclose(rnafile);
+	seqfclose(seqfile);
 
 	return previous_total - counter->total;
 }
@@ -194,24 +191,22 @@ uncount_kmer_fasta(KatssCounter *counter, const char *filename, const char *kmer
 static int
 uncount_kmer_fastq(KatssCounter *counter, const char *filename, const char *kmer)
 {
-	RnaFile rnafile = rnafopen(filename, "q");
-	if(rnafile == NULL) {
-		char *error = rnafstrerror(rnaferrno);
-		error_message("rnafopen: %s", error);
-		free(error);
+	SeqFile seqfile = seqfopen(filename, "q");
+	if(seqfile == NULL) {
+		error_message("seqfopen: %s", seqfstrerror(seqferrno));
 		return -1;
 	}
 
 	uint64_t previous_total = counter->total;
 	char buffer[BUFFER_SIZE] = { 0 };
 	register char *ptr;
-	while(rnafqread_unlocked(rnafile, buffer, BUFFER_SIZE)) {
+	while(seqfqread_unlocked(seqfile, buffer, BUFFER_SIZE)) {
 		ptr = buffer;
 		while((ptr = seqlseqq(ptr, kmer)) != NULL) {
 			ptr = process_line(counter, ptr, kmer);
 		}
 	}
-	rnafclose(rnafile);
+	seqfclose(seqfile);
 
 	return previous_total - counter->total;
 }
@@ -220,24 +215,22 @@ uncount_kmer_fastq(KatssCounter *counter, const char *filename, const char *kmer
 static int
 uncount_kmer_reads(KatssCounter *counter, const char *filename, const char *kmer)
 {
-	RnaFile rnafile = rnafopen(filename, "s");
-	if(rnafile == NULL) {
-		char *error = rnafstrerror(rnaferrno);
-		error_message("rnafopen: %s", error);
-		free(error);
+	SeqFile seqfile = seqfopen(filename, "s");
+	if(seqfile == NULL) {
+		error_message("seqfopen: %s", seqfstrerror(seqferrno));
 		return -1;
 	}
 
 	uint64_t previous_total = counter->total;
 	char buffer[BUFFER_SIZE] = { 0 };
 	register char *ptr;
-	while(rnafsread_unlocked(rnafile, buffer, BUFFER_SIZE)) {
+	while(seqfsread_unlocked(seqfile, buffer, BUFFER_SIZE)) {
 		ptr = buffer;
 		while((ptr = seqlseq(ptr, kmer)) != NULL) {
 			ptr = process_line(counter, ptr, kmer);
 		}
 	}
-	rnafclose(rnafile);
+	seqfclose(seqfile);
 
 	return previous_total - counter->total;
 }
@@ -411,11 +404,11 @@ decrement_kmer(KatssCounter *counter, const char *sequence, const char *pat, int
 static char
 determine_filetype(const char *file)
 {
-	/* Open the rnafFile, return 'N' upon error */
-	RnaFile reads_file = rnafopen(file, "b");
+	/* Open the seqfFile, return 'N' upon error */
+	SeqFile reads_file = seqfopen(file, "b");
 	if(reads_file == NULL) {
 		error_message("katss: %s: %s", file, strerror(errno));
-		rnafclose(reads_file);
+		seqfclose(reads_file);
 		return 'N';
 	}
 
@@ -424,7 +417,7 @@ determine_filetype(const char *file)
 	int fastq_score_lines = 0;
 	int sequence_lines = 0;
 
-	while (rnafgets(reads_file, buffer, BUFFER_SIZE) != NULL && lines_read < 10) {
+	while (seqfgets(reads_file, buffer, BUFFER_SIZE) != NULL && lines_read < 10) {
 		lines_read++;
 		char first_char = buffer[0];
 
@@ -438,7 +431,7 @@ determine_filetype(const char *file)
 
 		/* Check if the line starts with '>' or ';' for FASTA */
 		} else if (first_char == '>' || first_char == ';') {
-			rnafclose(reads_file);
+			seqfclose(reads_file);
 			return 'a';
 		} else {
 			// Check for nucleotide characters
@@ -455,7 +448,7 @@ determine_filetype(const char *file)
 		}
 	}
 
-    rnafclose(reads_file);
+    seqfclose(reads_file);
 
     if (fastq_score_lines >= 2) {
         return 'q'; // fastq file

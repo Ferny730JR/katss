@@ -12,13 +12,13 @@
 #include "counter.h"
 #include "hash_functions.h"
 #include "memory_utils.h"
-#include "rnafiles.h"
+#include "seqfile.h"
 #include "seqseq.h"
 
 #define BUFFER_SIZE 65536U
 
 struct threadinfo {
-	RnaFile rnafile;
+	SeqFile seqfile;
 	KatssCounter *counter;
 	char filetype;
 };
@@ -46,21 +46,19 @@ katss_recount_kmer(KatssCounter *counter, const char *filename, const char *remo
 	/* Push kmer to remove to counter */
 	kctr_push(counter, remove);
 
-	/* Open RnaFile for reading */
+	/* Open SeqFile for reading */
 	char mode[2] = { 0 };
 	mode[0] = filetype == 'r' ? 's' : filetype;
-	RnaFile read_file = rnafopen(filename, mode);
-	if(read_file == NULL) { /* Error opening RnaFile */
-		char *err = rnafstrerror(rnaferrno);
-		error_message("katss: rnafopen: %s\n", err);
-		free(err);
+	SeqFile read_file = seqfopen(filename, mode);
+	if(read_file == NULL) { /* Error opening SeqFile */
+		error_message("katss: seqfopen: %s\n", seqfstrerror(seqferrno));
 		return 2;
 	}
 
 	/* Initialize hasher */
 	KatssHasher *hasher = katss_init_hasher(counter->kmer, filetype);
 	if(hasher == NULL) {
-		rnafclose(read_file);
+		seqfclose(read_file);
 		return 3;
 	}
 
@@ -70,7 +68,7 @@ katss_recount_kmer(KatssCounter *counter, const char *filename, const char *remo
 
 	/* Begin recounting */
 	do {
-		still_reading = rnafread_unlocked(read_file, buffer, BUFFER_SIZE);
+		still_reading = seqfread_unlocked(read_file, buffer, BUFFER_SIZE);
 
 		/* Remove sequences in line */
 		katss_str_node_t *cur = counter->removed;
@@ -86,17 +84,15 @@ katss_recount_kmer(KatssCounter *counter, const char *filename, const char *remo
 	} while(still_reading);
 
 	/* If error was encountered while reading report and return NULL */
-	if(still_reading == 0 && rnaferrno) {
+	if(still_reading == 0 && seqferrno) {
 		ret = 4;
-		char *err = rnafstrerror(rnaferrno);
-		error_message("katss: %d: %s", rnaferrno, err);
-		free(err);
+		error_message("katss: %d: %s", seqferrno, seqfstrerror(seqferrno));
 	}
 
 	/* Cleanup */
 	free(hasher);
 	free(buffer);
-	rnafclose(read_file);
+	seqfclose(read_file);
 
 	return ret;
 }
@@ -118,7 +114,7 @@ recount_mt(void *arg)
 	size_t cur_hash = 0;
 
 	/* Begin re-counting */
-	while(rnafread(args->rnafile, buffer, BUFFER_SIZE)) {
+	while(seqfread(args->seqfile, buffer, BUFFER_SIZE)) {
 		/* Remove unwanted k-mers */
 		katss_str_node_t *cur = args->counter->removed;
 		while(cur != NULL) {
@@ -171,14 +167,12 @@ katss_recount_kmer_mt(KatssCounter *counter, const char *filename, const char *r
 	threads = MAX2(threads, 1);
 	threads = MIN2(threads, 128);
 
-	/* Open RnaFile for reading */
+	/* Open SeqFile for reading */
 	char mode[2] = { 0 };
 	mode[0] = filetype == 'r' ? 's' : filetype;
-	RnaFile read_file = rnafopen(filename, mode);
-	if(read_file == NULL) { /* Error opening RnaFile */
-		char *err = rnafstrerror(rnaferrno);
-		error_message("katss: rnafopen: %s\n", err);
-		free(err);
+	SeqFile read_file = seqfopen(filename, mode);
+	if(read_file == NULL) { /* Error opening SeqFile */
+		error_message("katss: seqfopen: %s\n", seqfstrerror(seqferrno));
 		return 2;
 	}
 
@@ -187,7 +181,7 @@ katss_recount_kmer_mt(KatssCounter *counter, const char *filename, const char *r
 	thrd_t *jobs = s_malloc(threads * sizeof *jobs);
 
 	for(int i=0; i<threads; i++) {
-		jobarg[i].rnafile = read_file;
+		jobarg[i].seqfile = read_file;
 		jobarg[i].counter = counter;
 		jobarg[i].filetype = filetype;
 
@@ -200,7 +194,7 @@ katss_recount_kmer_mt(KatssCounter *counter, const char *filename, const char *r
 	}
 
 	/* Free resources */
-	rnafclose(read_file);
+	seqfclose(read_file);
 	free(jobs);
 	free(jobarg);
 
@@ -231,11 +225,11 @@ is_nucleotide(char character)
 static char
 determine_filetype(const char *file)
 {
-	/* Open the RnaFile, return 'e' upon error */
-	RnaFile reads_file = rnafopen(file, "b");
+	/* Open the SeqFile, return 'e' upon error */
+	SeqFile reads_file = seqfopen(file, "b");
 	if(reads_file == NULL) {
 		error_message("katss: %s: %s", file, strerror(errno));
-		rnafclose(reads_file);
+		seqfclose(reads_file);
 		return 'N';
 	}
 
@@ -245,7 +239,7 @@ determine_filetype(const char *file)
 	int fasta_score_lines = 0;
 	int sequence_lines = 0;
 
-	while (rnafgets(reads_file, buffer, BUFFER_SIZE) != NULL && lines_read < 10) {
+	while (seqfgets(reads_file, buffer, BUFFER_SIZE) != NULL && lines_read < 10) {
 		lines_read++;
 		char first_char = buffer[0];
 
@@ -274,7 +268,7 @@ determine_filetype(const char *file)
 			}
 		}
 	}
-    rnafclose(reads_file);
+    seqfclose(reads_file);
 
     if (fastq_score_lines >= 2) {
         return 'q'; // fastq file

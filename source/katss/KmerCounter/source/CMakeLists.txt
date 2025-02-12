@@ -24,7 +24,7 @@ else()
 endif()
 
 # Specify include directories
-target_link_libraries(OBJLIB PRIVATE tinycthread KATSS_MEMORYUTILS KATSS_RNAFILES)
+target_link_libraries(OBJLIB PRIVATE tinycthread KATSS_MEMORYUTILS seqf_static)
 target_include_directories(OBJLIB PRIVATE ${KKCTR_INCLUDE_DIR})
 
 # Create static library
@@ -43,7 +43,7 @@ endif()
 
 #target_link_libraries(kkctr_shared # RNAFILES links tinycthread
 #	ZLIB::ZLIB KATSS_MEMORYUTILS KATSS_RNAFILES ${EXTRA_LIBS})
-target_link_libraries(kkctr_static PRIVATE KATSS_MEMORYUTILS KATSS_RNAFILES ${THREAD_LIB} ${EXTRA_LIBS})
+target_link_libraries(kkctr_static PRIVATE KATSS_MEMORYUTILS seqf_static ${THREAD_LIB} ${EXTRA_LIBS})
 
 # Set public include directory
 #target_include_directories(kkctr_shared PUBLIC ${KKCTR_INCLUDE_DIR})
