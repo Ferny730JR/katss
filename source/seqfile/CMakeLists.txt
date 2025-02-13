@@ -36,6 +36,7 @@ set(INSTALL_INC_DIR "${CMAKE_INSTALL_PREFIX}/include" CACHE PATH "Installation d
 # SeqFile user configuration files
 option(SEQF_BUILD_SHARED "Build shared SeqFile library" ON)
 option(SEQF_BUILD_STATIC "Build static SeqFile library" ON)
+option(SEQF_BUILD_TESTS "Build SeqFile unit tests" ON)
 option(SEQF_SKIP_INSTALL_ALL "Don't install any targets" OFF)
 option(SEQF_SKIP_INSTALL_LIBRARIES "Don't install shared and static libraries" OFF)
 option(SEQF_SKIP_INSTALL_STATIC "Don't install static library" OFF)
@@ -73,7 +74,9 @@ set(CMAKE_C_FLAGS_DEBUG "-O0 -ggdb3")
 # Begin building project
 add_subdirectory(include)
 add_subdirectory(source)
-add_subdirectory(test)
+if(SEQF_BUILD_TESTS)
+	add_subdirectory(test)
+endif(SEQF_BUILD_TESTS)
 
 # Install the library 
 if(NOT SEQF_SKIP_INSTALL_LIBRARIES AND NOT SEQF_SKIP_INSTALL_ALL)
