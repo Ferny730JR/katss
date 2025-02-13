@@ -9,50 +9,34 @@ set(KATSS_SOURCE_FILES
 	"${CMAKE_CURRENT_SOURCE_DIR}/enrichments.c"
 	"${CMAKE_CURRENT_SOURCE_DIR}/bootstrap.c")
 
-# Create objects for source files
-add_library(OBJLIB OBJECT "${KATSS_SOURCE_FILES}")
-
-# Shared libraries need PIC
-#set_property(TARGET OBJLIB PROPERTY POSITION_INDEPENDENT_CODE 1)
-target_compile_definitions(OBJLIB PRIVATE KATSS_VERBOSE=$<BOOL:${KKCTR_VERBOSE}>)
-
-# Set optimization flags for release builds
-if(ipo_is_supported)
-	set_property(TARGET OBJLIB PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
-else()
-	target_compile_options(OBJLIB PRIVATE "-O3")
-endif()
-
-# Specify include directories
-target_link_libraries(OBJLIB PRIVATE tinycthread KATSS_MEMORYUTILS seqf_static)
-target_include_directories(OBJLIB PRIVATE ${KKCTR_INCLUDE_DIR})
-
-# Create static library
-add_library(kkctr_static STATIC $<TARGET_OBJECTS:OBJLIB>)
-
-if(ipo_is_supported)
-	set_property(TARGET kkctr_static PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
-endif()
-
-# Link libraries with katss
+# Check for math library, which is used by katss
 include(CheckLibraryExists)
 CHECK_LIBRARY_EXISTS(m log2 "" HAVE_LIB_M)
 if(HAVE_LIB_M AND NOT CMAKE_SYSTEM_NAME STREQUAL "Darwin")
 	set(EXTRA_LIBS ${EXTRA_LIBS} m)
 endif()
 
-#target_link_libraries(kkctr_shared # RNAFILES links tinycthread
-#	ZLIB::ZLIB KATSS_MEMORYUTILS KATSS_RNAFILES ${EXTRA_LIBS})
-target_link_libraries(kkctr_static PRIVATE KATSS_MEMORYUTILS seqf_static ${THREAD_LIB} ${EXTRA_LIBS})
+# Create katss kmer counting static library
+add_library(kkctr_static STATIC ${KATSS_SOURCE_FILES})
 
-# Set public include directory
-#target_include_directories(kkctr_shared PUBLIC ${KKCTR_INCLUDE_DIR})
-target_include_directories(kkctr_static PUBLIC ${KKCTR_INCLUDE_DIR})
+target_include_directories(kkctr_static PUBLIC
+	${KKCTR_INCLUDE_DIR})
 
-# Set library properties
-#set_target_properties(kkctr_shared PROPERTIES
-#	VERSION ${PROJECT_VERSION}
-#	OUTPUT_NAME kkctr)
+target_link_libraries(kkctr_static PRIVATE
+	${THREAD_LIB}
+	KATSS_MEMORYUTILS
+	seqf_static
+	${EXTRA_LIBS})
+
+target_compile_definitions(kkctr_static PRIVATE
+	KATSS_VERBOSE=$<BOOL:${KKCTR_VERBOSE}>)
+
+if(ipo_is_supported)
+	set_property(TARGET kkctr_static PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
+else()
+	target_compile_options(kkctr_static PRIVATE "-O3")
+endif(ipo_is_supported)
+
 set_target_properties(kkctr_static PROPERTIES
 	VERSION ${PROJECT_VERSION}
 	OUTPUT_NAME kkctr)
