@@ -26,7 +26,8 @@ set(KKCTR_PUBLIC_HEADERS
 	"${KKCTR_INCLUDE_DIR}/counter.h"
 	"${KKCTR_INCLUDE_DIR}/hash_functions.h"
 	"${KKCTR_INCLUDE_DIR}/enrichments.h"
-	"${KKCTR_INCLUDE_DIR}/seqseq.h")
+	"${KKCTR_INCLUDE_DIR}/seqseq.h"
+	"${KKCTR_INCLUDE_DIR}/bootstrap.h")
 
 add_subdirectory(source)
 

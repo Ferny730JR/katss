@@ -2,6 +2,7 @@
 #define KATSS_BOOTSTRAP_H
 
 #include <stdbool.h>
+#include <stdint.h>
 
 typedef enum {
 	enrichments,
