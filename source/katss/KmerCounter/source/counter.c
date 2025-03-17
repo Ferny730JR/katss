@@ -13,6 +13,7 @@
 #include "counter.h"
 #include "hash_functions.h"
 #include "memory_utils.h"
+#include "ushuffle.h"
 #include "seqfile.h"
 
 #define BUFFER_SIZE 65536U
@@ -360,6 +361,142 @@ count_file_mt(void *arg)
 
 	return 0;
 }
+
+/*==============================================================================
+ Ushuffle counting functions
+==============================================================================*/
+KatssCounter *
+katss_count_kmers_ushuffle(const char *filename, unsigned int kmer, int klet)
+{
+	/* Determine file type, or return NULL on error */
+	char filetype = determine_filetype(filename);
+	if(filetype == 'e' || filetype == 'N')
+		return NULL;
+	
+	KatssCounter *counter = NULL;
+
+	if(klet < 1)
+		goto exit;
+
+	/* Open file and prepare counter & hasher */
+	char *buffer = s_calloc(BUFFER_SIZE, sizeof *buffer);
+	char *shuf   = s_calloc(BUFFER_SIZE, sizeof *shuf);
+	uint32_t hash_value;
+
+	/* Open file */
+	filetype = filetype == 'r' ? 's' : filetype;
+	buffer[0] = filetype;
+	SeqFile read_file = seqfopen(filename, buffer);
+	if(read_file == NULL)
+		goto exit;
+
+	KatssHasher *hasher = katss_init_hasher(kmer, filetype);
+	if(hasher == NULL)
+		goto cleanup_file;
+
+	counter = katss_init_counter(kmer);
+	if(counter == NULL)
+		goto cleanup_hasher;
+
+	while(seqfread_unlocked(read_file, buffer, BUFFER_SIZE)) {
+		shuffle(buffer, shuf, (int)strlen(buffer), klet);
+		katss_set_seq(hasher, shuf, 'r');
+		while(katss_get_fh(hasher, &hash_value, 'r')) {
+			katss_increment(counter, hash_value);
+		}
+	}
+
+	/* If error was encountered while reading report and return NULL */
+	if(seqferrno) {
+		katss_free_counter(counter);
+		counter = NULL;
+		error_message("katss: %d: %s", seqferrno, seqfstrerror(seqferrno));
+	}
+
+cleanup_hasher:
+	free(hasher);
+cleanup_file:
+	seqfclose(read_file);
+exit:
+	free(buffer);
+	free(shuf);
+	return counter;
+}
+
+KatssCounter *
+katss_count_kmers_ushuffle_bootstrap(const char *filename, unsigned int kmer,
+                                     int klet, int sample, unsigned int *seed)
+{
+	/* sample should be between 1-100000 */
+	sample = MAX2(sample, 1);
+	sample = MIN2(sample, 100000);
+
+	/* If not subsampling, just do regular ushuffle */
+	if(sample == 100000)
+		return katss_count_kmers_ushuffle(filename, kmer, klet);
+
+	/* Check klet */
+	if(klet < 1)
+		return NULL;
+
+	char filetype = determine_filetype(filename);
+	if(filetype == 'e' || filetype == 'N')
+		return NULL;
+
+	KatssCounter *counter = NULL;
+
+	/* Initialize buffer */
+	char *buffer = s_calloc(BUFFER_SIZE, sizeof *buffer);
+	char *shuf   = s_calloc(BUFFER_SIZE, sizeof *shuf);
+	uint32_t hash_value;
+
+	/* Open file and hasher */
+	buffer[0] = filetype == 'r' ? 's' : filetype;
+	SeqFile read_file = seqfopen(filename, buffer);
+	if(read_file == NULL)
+		goto exit;
+	
+	KatssHasher *hasher = katss_init_hasher(kmer, filetype);
+	if(hasher == NULL)
+		goto cleanup_file;
+	
+	counter = katss_init_counter(kmer);
+	if(counter == NULL)
+		goto cleanup_hasher;
+
+	/* int to subsample from rand() */
+	unsigned int local_seed;
+	if(seed == NULL) {
+		local_seed = time(NULL);
+		seed = &local_seed;
+	}
+
+	while(seqfgets_unlocked(read_file, buffer, BUFFER_SIZE)) {
+		if(rand_r(seed) % 100000 > sample)
+			continue;
+		shuffle(buffer, shuf, strlen(buffer), klet);
+		katss_set_seq(hasher, shuf, 'r');
+		while(katss_get_fh(hasher, &hash_value, 'r')) {
+			katss_increment(counter, hash_value);
+		}
+	}
+
+	if(seqferrno) {
+		error_message("katss: sample: %s\n", seqfstrerror_r(seqferrno, buffer, BUFFER_SIZE));
+		katss_free_counter(counter);
+		counter = NULL;
+	}
+
+cleanup_hasher:
+	free(hasher);
+cleanup_file:
+	seqfclose(read_file);
+exit:
+	free(buffer);
+	free(shuf);
+	return counter;
+}
+
 /*==============================================================
 |  Helper Functions                                            |
 ==============================================================*/

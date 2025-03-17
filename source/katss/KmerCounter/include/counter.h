@@ -154,10 +154,44 @@ katss_count_kmers_bootstrap(const char *filename, unsigned int kmer, int sample)
 KatssCounter *
 katss_count_kmers_bootstrap_mt(const char *filename, unsigned int kmer, int sample, int threads);
 
+
+/**
+ * @brief Shuffle the sequences in a file, preserving the klet nucleotide
+ * frequency, and count the shuffled kmers.
+ * 
+ * @param filename Name of the file to count the shuffled k-mers in
+ * @param kmer     Length of the k-mer to count
+ * @param klet     Length of k-let to preserve in sequence
+ * @return KatssCounter* struct containing the shuffled counts
+ */
+KatssCounter *
+katss_count_kmers_ushuffle(const char *filename, unsigned int kmer, int klet);
+
+
+/**
+ * @brief Count the shuffled sequences in a sub-sampled file.
+ * 
+ * @param filename Name of the file to count on
+ * @param kmer     Length of the k-mer to count
+ * @param klet     Length of k-let to preserve in sequence
+ * @param sample   Percent to sample (should be between 1-100000, each number
+ * representing 0.001%. E.g., 12345 -> 12.345%)
+ * @param seed     Seed to use for random sample. NULL to use a random seed
+ * @return KatssCounter* struct containing the sub-sampled shuffled counts
+ */
+KatssCounter *
+katss_count_kmers_ushuffle_bootstrap(
+	const char *filename,
+	unsigned int kmer,
+	int klet,
+	int sample,
+	unsigned int *seed);
+
+
 /**
  * @brief Recount all k-mers in a KmerCounter
  * 
- * Sets all the counts to 0, and recount k-mers exclusing the k-mer specified from remove. 
+ * Sets all the counts to 0, and recount k-mers excluding the k-mer specified from remove. 
  * The KatssCounter will keep in memory the previous k-mers it has removed for subsequent recount,
  * excluding those too.
  * 
