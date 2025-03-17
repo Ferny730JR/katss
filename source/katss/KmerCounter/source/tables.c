@@ -43,6 +43,9 @@ katss_init_counter(unsigned int kmer)
 void
 katss_free_counter(KatssCounter *counter)
 {
+	if(counter == NULL)
+		return;
+
 	if(counter->kmer <= 12) {
 		free(counter->table.small);
 	} else if(counter->kmer <= 16) {
