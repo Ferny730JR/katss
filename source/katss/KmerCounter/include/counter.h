@@ -136,10 +136,15 @@ KatssCounter *katss_count_kmers_mt(const char *filename, unsigned int kmer, int 
  * @param filename   Name of the file to count sub-sampled k-mers on
  * @param kmer       Length of k-mer to count
  * @param sample     Percent to sample. Should be between 1 and 100
+ * @param seed       Seed to use for random sample, NULL to use a random seed
  * @return KatssCounter* struct containing the sub-sampled counts
  */
 KatssCounter *
-katss_count_kmers_bootstrap(const char *filename, unsigned int kmer, int sample);
+katss_count_kmers_bootstrap(
+	const char *filename,
+	unsigned int kmer,
+	int sample,
+	unsigned int *seed);
 
 
 /**
@@ -148,11 +153,17 @@ katss_count_kmers_bootstrap(const char *filename, unsigned int kmer, int sample)
  * @param filename Name of the file to count sub-samples k-mers on
  * @param kmer     Length of the k-mer to count
  * @param sample   Percent to sample. Should be between 1 and 100
+ * @param seed       Seed to use for random sample, NULL to use a random seed
  * @param threads  Number of threads to use
  * @return KatssCounter* struct containing the sub-sampled counts
  */
 KatssCounter *
-katss_count_kmers_bootstrap_mt(const char *filename, unsigned int kmer, int sample, int threads);
+katss_count_kmers_bootstrap_mt(
+	const char *filename,
+	unsigned int kmer,
+	int sample,
+	unsigned int *seed,
+	int threads);
 
 
 /**

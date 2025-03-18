@@ -15,6 +15,7 @@
 #include "memory_utils.h"
 #include "ushuffle.h"
 #include "seqfile.h"
+#include "thread_safe_rand.h"
 
 #define BUFFER_SIZE 65536U
 
@@ -23,6 +24,7 @@ struct threadinfo {
 	KatssCounter *counter;
 	unsigned int kmer;
 	int sample;
+	unsigned int *seed;
 	char filetype;
 };
 typedef struct threadinfo threadinfo;
@@ -117,7 +119,8 @@ katss_count_kmers_mt(const char *filename, unsigned int kmer, int threads)
 
 
 KatssCounter *
-katss_count_kmers_bootstrap(const char *filename, unsigned int kmer, int sample)
+katss_count_kmers_bootstrap(const char *filename, unsigned int kmer,
+                            int sample, unsigned int *seed)
 {
 	char filetype = determine_filetype(filename);
 	if(filetype == 'e' || filetype == 'N')
@@ -143,14 +146,18 @@ katss_count_kmers_bootstrap(const char *filename, unsigned int kmer, int sample)
 	if(counter == NULL)
 		goto cleanup_hasher;
 
-	/* sample should be between 1-100 */
+	/* sample should be between 1-100000 */
 	sample = MAX2(sample, 1);
-	sample = MIN2(sample, 100);
+	sample = MIN2(sample, 100000);
 
-	/* int to subsample from rand() */
-	unsigned int seed = time(NULL);
+	unsigned int local_seed;
+	if(seed == NULL) {
+		local_seed = time(NULL);
+		seed = &local_seed;
+	}
+
 	while(seqfgets_unlocked(read_file, buffer, BUFFER_SIZE)) {
-		if(rand_r(&seed) % 100 > sample)
+		if(rand_r(seed) % 100000 >= sample)
 			continue;
 		katss_set_seq(hasher, buffer, filetype);
 		while(katss_get_fh(hasher, &hash_value, filetype)) {
@@ -179,6 +186,7 @@ count_file_bootstrap_mt(void *arg)
 {
 	threadinfo *args = (threadinfo *)arg;
 	char *buffer = s_malloc(BUFFER_SIZE * sizeof *buffer);
+	thread_safe_rand_t *tsr = thread_safe_rand_init();
 
 	KatssHasher *hasher = katss_init_hasher(args->kmer, '\0');
 	if(hasher == NULL)
@@ -190,9 +198,8 @@ count_file_bootstrap_mt(void *arg)
 	size_t cur_hash = 0;
 
 	/* Begin counting */
-	unsigned int seed = time(NULL);
 	while(seqfgets(args->seqfile, buffer, BUFFER_SIZE)) {
-		if(rand_r(&seed) % 100 >= args->sample)
+		if(thread_safe_rand_r(tsr, args->seed) % 100000 >= args->sample)
 			continue;
 		katss_set_seq(hasher, buffer, args->filetype);
 		while(katss_get_fh(hasher, &hash_values[cur_hash], args->filetype)) {
@@ -207,6 +214,7 @@ count_file_bootstrap_mt(void *arg)
 	katss_increments(args->counter, hash_values, cur_hash);
 
 	/* Free resources */
+	thread_safe_rand_free(tsr);
 	free(hasher);
 	free(buffer);
 	free(hash_values);
@@ -216,23 +224,24 @@ count_file_bootstrap_mt(void *arg)
 
 
 KatssCounter *
-katss_count_kmers_bootstrap_mt(const char *filename, unsigned int kmer, int sample, int threads)
+katss_count_kmers_bootstrap_mt(const char *filename, unsigned int kmer,
+                               int sample, unsigned int *seed, int threads)
 {
 	threads = MAX2(threads, 1);
 	threads = MIN2(threads, 128);
 
 	/* Process single-threaded computation */
 	if(threads == 1)
-		return katss_count_kmers_bootstrap(filename, kmer, sample);
+		return katss_count_kmers_bootstrap(filename, kmer, sample, seed);
 
 	/* Multi-threading */
 	char filetype = determine_filetype(filename);
 	if(filetype == 'e' || filetype == 'N')
 		return NULL;
 
-	/* sample should be between 1-100 */
+	/* sample should be between 1-100000 */
 	sample = MAX2(sample, 1);
-	sample = MIN2(sample, 100);
+	sample = MIN2(sample, 100000);
 
 	/* Open SeqFile for reading */
 	char mode[2] = { 0 };
@@ -258,6 +267,7 @@ katss_count_kmers_bootstrap_mt(const char *filename, unsigned int kmer, int samp
 		jobarg[i].kmer = kmer;
 		jobarg[i].filetype = filetype;
 		jobarg[i].sample = sample;
+		jobarg[i].seed = seed;
 
 		/* Start threads */
 		thrd_create(&jobs[i], count_file_bootstrap_mt, &jobarg[i]);
@@ -372,11 +382,11 @@ katss_count_kmers_ushuffle(const char *filename, unsigned int kmer, int klet)
 	char filetype = determine_filetype(filename);
 	if(filetype == 'e' || filetype == 'N')
 		return NULL;
-	
-	KatssCounter *counter = NULL;
 
 	if(klet < 1)
-		goto exit;
+		return NULL;
+
+	KatssCounter *counter = NULL;
 
 	/* Open file and prepare counter & hasher */
 	char *buffer = s_calloc(BUFFER_SIZE, sizeof *buffer);
@@ -398,7 +408,8 @@ katss_count_kmers_ushuffle(const char *filename, unsigned int kmer, int klet)
 	if(counter == NULL)
 		goto cleanup_hasher;
 
-	while(seqfread_unlocked(read_file, buffer, BUFFER_SIZE)) {
+	srand(1); // reset rand seed for shuffle
+	while(seqfgets_unlocked(read_file, buffer, BUFFER_SIZE)) {
 		shuffle(buffer, shuf, (int)strlen(buffer), klet);
 		katss_set_seq(hasher, shuf, 'r');
 		while(katss_get_fh(hasher, &hash_value, 'r')) {
@@ -471,8 +482,9 @@ katss_count_kmers_ushuffle_bootstrap(const char *filename, unsigned int kmer,
 		seed = &local_seed;
 	}
 
+	srand(1); // reset rand seed for shuffle
 	while(seqfgets_unlocked(read_file, buffer, BUFFER_SIZE)) {
-		if(rand_r(seed) % 100000 > sample)
+		if(rand_r(seed) % 100000 >= sample)
 			continue;
 		shuffle(buffer, shuf, strlen(buffer), klet);
 		katss_set_seq(hasher, shuf, 'r');
