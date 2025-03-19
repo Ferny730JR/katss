@@ -36,6 +36,7 @@ KatssEnrichments *katss_prob_ikke(const char *test_file, unsigned int kmer, uint
 KatssEnrichment katss_top_enrichment(KatssCounter *test, KatssCounter *control, bool normalize);
 KatssEnrichment katss_top_prediction(KatssCounter *test, KatssCounter *mono, KatssCounter *dint, bool normalize);
 void katss_free_enrichments(KatssEnrichments *enrichments);
+void katss_sort_enrichments(KatssEnrichments *enrichments);
 
 #ifdef __cplusplus
 }

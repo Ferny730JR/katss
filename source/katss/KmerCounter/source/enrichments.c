@@ -12,7 +12,6 @@
 static double predict_kmer(char *kseq, KatssCounter *monomer_counts, KatssCounter *dimer_counts);
 KatssEnrichment katss_top_enrichment(KatssCounter *test, KatssCounter *control, bool normalize);
 KatssEnrichment katss_top_prediction(KatssCounter *test, KatssCounter *mono, KatssCounter *dint, bool normalize);
-static int compare(const void *a, const void *b);
 
 KatssEnrichments *
 katss_compute_enrichments(KatssCounter *test, KatssCounter *control, bool normalize)
@@ -47,7 +46,6 @@ katss_compute_enrichments(KatssCounter *test, KatssCounter *control, bool normal
 
 		enrichments->enrichments[i].enrichment = r_val;
 	}
-	qsort(enrichments->enrichments, num_enrichments, sizeof(KatssEnrichment), compare);
 	return enrichments;
 }
 
@@ -111,7 +109,6 @@ katss_compute_prob_enrichments(KatssCounter *test, KatssCounter *mono,
 
 		enrichments->enrichments[i].enrichment = r_val;
 	}
-	qsort(enrichments->enrichments, num_enrichments, sizeof(KatssEnrichment), compare);
 	return enrichments;
 }
 
@@ -464,8 +461,10 @@ katss_top_prediction(KatssCounter *test, KatssCounter *mono, KatssCounter *dint,
 void
 katss_free_enrichments(KatssEnrichments *enrichments)
 {
-	free(enrichments->enrichments);
-	free(enrichments);
+	if(enrichments != NULL) {
+		free(enrichments->enrichments);
+		free(enrichments);
+	}
 }
 
 
@@ -490,4 +489,14 @@ compare(const void *a, const void *b)
 	} else {
 		return 0;
 	}
+}
+
+
+void
+katss_sort_enrichments(KatssEnrichments *enrichments)
+{
+	qsort(enrichments->enrichments,
+	      enrichments->num_enrichments,
+		  sizeof *enrichments->enrichments,
+		  compare);
 }
