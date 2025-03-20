@@ -100,12 +100,48 @@ katss_get_from_hash(KatssCounter *counter, KATSS_TYPE numeric_type, void *value,
 
 
 /**
+ * @brief Get sum of all kmers in counter
+ * 
+ * @param counter   Pointer to that KatssCounter struct
+ * @return uint64_t Total number of kmers in counter
+ */
+uint64_t
+katss_get_total(KatssCounter *counter);
+
+
+/**
  * @brief Frees all allocated resources from KatssCounter.
  * 
  * @param counter Pointer to initialized KatssCounter struct
  */
 void
 katss_free_counter(KatssCounter *counter);
+
+
+/**
+ * @brief Predict the kmer frequency
+ * 
+ * @param hash Numerical representation of a kmer (0 = A, 1=C, 2=G, 3=T) to predict
+ * @param kmer Length of kmer to predict
+ * @param mono Mono-nucleotide counts
+ * @param dint Di-nucleotide counts
+ * @return double Predicted kmer frequency
+ */
+double
+katss_predict_kmer_freq(uint32_t hash, int kmer, KatssCounter *mono, KatssCounter *dint);
+
+
+/**
+ * @brief Predict the kmer count
+ * 
+ * @param hash Numerical representation of a kmer (0 = A, 1=C, 2=G, 3=T) to predict
+ * @param kmer Length of kmer to predict
+ * @param mono Mono-nucleotide counts
+ * @param dint Di-nucleotide counts
+ * @return uint64_t Predicted kmer count
+ */
+uint64_t
+katss_predict_kmer(uint32_t hash, int kmer, KatssCounter *mono, KatssCounter *dint);
 
 
 /**

@@ -2,10 +2,12 @@
 #include <float.h>
 #include <stdatomic.h>
 #include <limits.h>
+#include <math.h>
 
 #include "katss_core.h"
 #include "counter.h"
 #include "memory_utils.h"
+#include "hash_functions.h"
 
 /* Function declarations */
 static void init_small_table(KatssCounter *counter, unsigned int kmer);
@@ -240,6 +242,55 @@ katss_get_from_hash(KatssCounter *counter, KATSS_TYPE numeric_type, void *value,
 	}
 
 	return 0;
+}
+
+
+uint64_t
+katss_get_total(KatssCounter *counter)
+{
+	return counter->total;
+}
+
+
+double
+katss_predict_kmer_freq(uint32_t hash, int kmer, KatssCounter *mono, KatssCounter *dint)
+{
+	char kseq[32];
+	katss_unhash(kseq, hash, kmer, true);
+	char monoseq[2] = { 0 };
+	char diseq[3]   = { 0 };
+
+	double monoprob = 1;
+	double diprob = 1;
+
+	/* Get the cumulative probabilities for overlapping monomers */
+	for(int i=1; i<kmer-1; i++) {
+		monoseq[0] = kseq[i];
+		double count;
+		katss_get(mono, KATSS_DOUBLE, &count, monoseq);
+		monoprob *= count/mono->total;
+	}
+
+	/* Get probabilities for all di-mers in k-mer */
+	for(int i=0; i<kmer-1; i++) {
+		diseq[0] = kseq[i]; diseq[1] = kseq[i+1];
+		double count;
+		katss_get(dint, KATSS_DOUBLE, &count, diseq);
+		diprob *= count/dint->total;
+	}
+
+	/* Predicted k-mer probability is dinucleotides / overlapping monomers */
+	return diprob/monoprob;
+}
+
+
+uint64_t
+katss_predict_kmer(uint32_t hash, int kmer, KatssCounter *mono, KatssCounter *dint)
+{
+	double freq_pred = katss_predict_kmer_freq(hash, kmer, mono, dint);
+
+	uint64_t numseqs = 10000; // pick an arbitrary number of sequences
+	return (uint64_t)(freq_pred * (mono->total - (numseqs * (kmer-1))));
 }
 
 
