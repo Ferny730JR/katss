@@ -161,7 +161,7 @@ main(int argc, char *argv[])
 		else if(opt.probabilistic)
 			enr = katss_prob_ikke(opt.test_file, opt.kmer, opt.iterations, !opt.no_log);
 		else
-			enr = katss_ikke(opt.test_file, opt.ctrl_file, opt.kmer, opt.iterations, !opt.no_log);
+			enr = katss_ikke_(opt.test_file, opt.ctrl_file, opt.kmer, opt.iterations, !opt.no_log);
 
 		/* Check results */
 		if(enr == NULL)

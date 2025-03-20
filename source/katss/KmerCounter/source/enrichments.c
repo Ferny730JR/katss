@@ -146,7 +146,7 @@ exit:
 |                                          IKKE Functions                                          |
 ==================================================================================================*/
 KatssEnrichments *
-katss_ikke(const char *test_file, const char *control_file, unsigned int kmer, uint64_t iterations, bool normalize)
+katss_ikke_(const char *test_file, const char *control_file, unsigned int kmer, uint64_t iterations, bool normalize)
 {
 	KatssEnrichments *enrichments = NULL;
 

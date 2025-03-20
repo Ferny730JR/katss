@@ -29,7 +29,7 @@ KatssEnrichments *katss_prob_enrichments(const char *test_file, unsigned int kme
 /* IKKE Functions */
 KatssEnrichments *katss_ikke_mt(const char *test_file, const char *control_file, unsigned int kmer, 
                                 uint64_t iterations, bool normalize, int threads);
-KatssEnrichments *katss_ikke(const char *test_file, const char *control_file, unsigned int kmer, uint64_t iterations, bool normalize);
+KatssEnrichments *katss_ikke_(const char *test_file, const char *control_file, unsigned int kmer, uint64_t iterations, bool normalize);
 KatssEnrichments *katss_prob_ikke_mt(const char *test_file, unsigned int kmer, uint64_t iterations, bool normalize, int threads);
 KatssEnrichments *katss_prob_ikke(const char *test_file, unsigned int kmer, uint64_t iterations, bool normalize);
 
