@@ -7,7 +7,13 @@ set(KATSS_SOURCE_FILES
 	"${CMAKE_CURRENT_SOURCE_DIR}/recounter.c"
 	"${CMAKE_CURRENT_SOURCE_DIR}/uncounter.c"
 	"${CMAKE_CURRENT_SOURCE_DIR}/enrichments.c"
-	"${CMAKE_CURRENT_SOURCE_DIR}/bootstrap.c")
+	"${CMAKE_CURRENT_SOURCE_DIR}/ushuffle.c"
+	"${CMAKE_CURRENT_SOURCE_DIR}/katss_helpers.c"
+	"${CMAKE_CURRENT_SOURCE_DIR}/katss_count.c"
+	"${CMAKE_CURRENT_SOURCE_DIR}/katss_enrichment.c"
+	"${CMAKE_CURRENT_SOURCE_DIR}/katss_ikke.c"
+	"${CMAKE_CURRENT_SOURCE_DIR}/thread_safe_rand.c"
+	)
 
 # Check for math library, which is used by katss
 include(CheckLibraryExists)
@@ -25,6 +31,7 @@ target_include_directories(kkctr_static PUBLIC
 target_link_libraries(kkctr_static PRIVATE
 	${THREAD_LIB}
 	KATSS_MEMORYUTILS
+	T_TEST_LIB
 	seqf_static
 	${EXTRA_LIBS})
 

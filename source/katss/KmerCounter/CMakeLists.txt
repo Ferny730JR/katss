@@ -23,6 +23,7 @@ option(KKCTR_SKIP_INSTALL_HEADER "Don't install header files" OFF)
 # Set public header/API for library
 set(KKCTR_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include")
 set(KKCTR_PUBLIC_HEADERS
+	"${KKCTR_INCLUDE_DIR}/katss.h"
 	"${KKCTR_INCLUDE_DIR}/counter.h"
 	"${KKCTR_INCLUDE_DIR}/hash_functions.h"
 	"${KKCTR_INCLUDE_DIR}/enrichments.h"
