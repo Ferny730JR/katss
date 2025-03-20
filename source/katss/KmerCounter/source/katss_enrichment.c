@@ -83,18 +83,15 @@ regular(const char *test, const char *ctrl, KatssOptions *opts)
 static KatssData *
 probs(const char *test, KatssOptions *opts)
 {
-	KatssData *data       = NULL;
 	KatssEnrichments *enr = NULL;
-	unsigned int kmer     = opts->kmer;
-	bool normalize        = opts->normalize;
 
 	/* Compute probabilistic enrichments */
-	enr = katss_prob_enrichments(test, kmer, normalize);
+	enr = katss_prob_enrichments(test, opts->kmer, opts->normalize);
 	if(enr == NULL)
 		return NULL;
 
 	/* Initialize kdata */
-	data = katss_init_kdata(kmer);
+	KatssData *data = katss_init_kdata(opts->kmer);
 	if(data == NULL)
 		goto exit;
 	
@@ -180,10 +177,8 @@ both(const char *test, KatssOptions *opts)
 	KatssData *data = NULL;
 	KatssEnrichments *shuf = NULL;
 	KatssEnrichments *prob = NULL;
-
 	unsigned int kmer = opts->kmer;
 	int klet          = opts->probs_ntprec;
-	bool normalize    = opts->normalize;
 
 	/* Compute the counts */	
 	KatssCounter *test_counts = katss_count_kmers_ushuffle(test, kmer, klet);
@@ -193,7 +188,7 @@ both(const char *test, KatssOptions *opts)
 		goto exit_error;
 
 	/* Compute the enrichments */
-	shuf = katss_compute_prob_enrichments(test_counts, mono_counts, dint_counts, normalize);
+	shuf = katss_compute_prob_enrichments(test_counts, mono_counts, dint_counts, false);
 	if(shuf == NULL)
 		goto exit_error;
 
@@ -203,15 +198,16 @@ both(const char *test, KatssOptions *opts)
 	katss_free_counter(dint_counts);
 
 	/* Compute the probabilistic enrichments */
-	prob = katss_prob_enrichments(test, kmer, normalize);
+	prob = katss_prob_enrichments(test, kmer, false);
 	if(prob == NULL)
 		goto exit;
 
 	/* Compute rval from both probabilistic methods */
 	data = katss_init_kdata(kmer);
 	for(uint64_t i=0; i<shuf->num_enrichments; i++) {
+		double rval = prob->enrichments[i].enrichment / shuf->enrichments[i].enrichment;
+		data->kmers[i].rval = opts->normalize ? log2(rval) : rval;
 		data->kmers[i].kmer = (uint32_t)i;
-		data->kmers[i].rval = prob->enrichments[i].enrichment / shuf->enrichments[i].enrichment;
 	}
 
 	katss_free_enrichments(prob);
@@ -283,9 +279,9 @@ bootstrap_regular(const char *test, const char *ctrl, KatssOptions *opts)
 	for(uint64_t i=0; i<enrichments->num_kmers; i++) {
 		enrichments->kmers[i].kmer = i;
 		enrichments->kmers[i].stdev = sqrt(ttest2[i]->pval / (opts->bootstrap_iters - 1));
+		enrichments->kmers[i].rval = opts->normalize ? log2(ttest2[i]->df) : ttest2[i]->df;
 
 		t_test2_finalize(ttest2[i]);
-		enrichments->kmers[i].rval = ttest2[i]->x_mean / ttest2[i]->y_mean;
 		enrichments->kmers[i].pval = ttest2[i]->pval;
 		t_test2_destroy(ttest2[i]);
 	}
@@ -363,7 +359,11 @@ bootstrap_probs(const char *test, KatssOptions *opts)
 	for(uint64_t i=0; i<enrichments->num_kmers; i++) {
 		enrichments->kmers[i].kmer = i;
 		enrichments->kmers[i].stdev = sqrt(ttest2[i]->pval / (opts->bootstrap_iters - 1));
-		enrichments->kmers[i].rval = ttest2[i]->df; // df holds rval
+		if(opts->normalize) {
+			enrichments->kmers[i].rval = log2(ttest2[i]->df); // df holds rval
+		} else {
+			enrichments->kmers[i].rval = ttest2[i]->df; // df holds rval
+		}
 
 		t_test2_finalize(ttest2[i]);
 		enrichments->kmers[i].pval = ttest2[i]->pval;
@@ -445,7 +445,11 @@ bootstrap_ushuffle(const char *test, KatssOptions *opts)
 	for(uint64_t i=0; i<enrichments->num_kmers; i++) {
 		enrichments->kmers[i].kmer = i;
 		enrichments->kmers[i].stdev = sqrt(ttest2[i]->pval / (opts->bootstrap_iters - 1));
-		enrichments->kmers[i].rval = ttest2[i]->df; // df holds rval currently
+		if(opts->normalize) {
+			enrichments->kmers[i].rval = log2(ttest2[i]->df); // df holds rval currently
+		} else {
+			enrichments->kmers[i].rval = ttest2[i]->df; // df holds rval currently
+		}
 
 		t_test2_finalize(ttest2[i]);
 		enrichments->kmers[i].pval = ttest2[i]->pval;
@@ -496,7 +500,6 @@ bootstrap_both(const char *test, KatssOptions *opts)
 	int klet                  = opts->probs_ntprec;
 	int sample                = opts->bootstrap_sample;
 	int threads               = opts->threads;
-	bool normalize            = opts->normalize;
 	unsigned int seed1,seed2,seed3,seed4,seed5,seed6;
 	seed1 = seed2 = seed3 = seed4 = seed5 = seed6 = opts->seed;
 
@@ -516,7 +519,7 @@ bootstrap_both(const char *test, KatssOptions *opts)
 			goto exit_error;
 
 		/* Compute probabilistic enrichmenst of shuffled counts */
-		shuf = katss_compute_prob_enrichments(test_counts, mono_counts, dint_counts, normalize);
+		shuf = katss_compute_prob_enrichments(test_counts, mono_counts, dint_counts, false);
 		if(shuf == NULL)
 			goto exit_error;
 
@@ -530,7 +533,7 @@ bootstrap_both(const char *test, KatssOptions *opts)
 		dint_counts = katss_count_kmers_bootstrap_mt(test, 2,    sample, &seed6, threads);
 		if(test_counts == NULL || mono_counts == NULL || dint_counts == NULL)
 			goto exit_error_probs;
-		prob = katss_compute_prob_enrichments(test_counts, mono_counts, dint_counts, normalize);
+		prob = katss_compute_prob_enrichments(test_counts, mono_counts, dint_counts, false);
 		if(prob == NULL)
 			goto exit_error_probs;
 		katss_free_counter(test_counts);
@@ -558,7 +561,11 @@ bootstrap_both(const char *test, KatssOptions *opts)
 	for(uint64_t i=0; i<enrichments->num_kmers; i++) {
 		enrichments->kmers[i].kmer = i;
 		enrichments->kmers[i].stdev = sqrt(ttest2[i]->pval / (opts->bootstrap_iters - 1));
-		enrichments->kmers[i].rval = ttest2[i]->df; // df holds rval currently
+		if(opts->normalize) {
+			enrichments->kmers[i].rval = log2(ttest2[i]->df);
+		} else {
+			enrichments->kmers[i].rval = ttest2[i]->df; // df holds rval currently
+		} 
 
 		t_test2_finalize(ttest2[i]);
 		enrichments->kmers[i].pval = ttest2[i]->pval;
