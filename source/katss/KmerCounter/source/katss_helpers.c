@@ -68,7 +68,7 @@ katss_parse_options(KatssOptions *opts)
 	
 	/*================= Update values =================*/
 	if(opts->probs_ntprec == -1)
-		opts->probs_ntprec = (int)round(sqrt((double)opts->probs_ntprec));
+		opts->probs_ntprec = (int)round(sqrt((double)opts->kmer));
 	if(opts->seed < 0)
 		opts->seed = time(NULL);
 	
