@@ -10,13 +10,45 @@
 static KatssData *
 regular(const char *test, const char *ctrl, KatssOptions *opts)
 {
-	return NULL;
+	/* Compute iterative kmer knockout enrichments */
+	KatssEnrichments *enr;
+	enr = katss_ikke_mt(test, ctrl, opts->kmer, opts->iters, opts->normalize, opts->threads);
+	if(enr == NULL)
+		return NULL;
+
+	/* Move enrichments to data */
+	KatssData *data;
+	if((data = katss_init_kdata(opts->kmer)) == NULL)
+		goto exit;
+	for(uint64_t i=0; i<enr->num_enrichments; i++) {
+		data->kmers[i].kmer = enr->enrichments[i].key;
+		data->kmers[i].rval = enr->enrichments[i].enrichment;
+	}
+
+exit:
+	katss_free_enrichments(enr);
+	return data;
 }
 
 static KatssData *
 probs(const char *test, KatssOptions *opts)
 {
-	return NULL;
+	KatssEnrichments *enr;
+	enr = katss_prob_ikke_mt(test, opts->kmer, opts->iters, opts->normalize, opts->threads);
+	if(enr == NULL)
+		return NULL;
+	
+	KatssData *data;
+	if((data = katss_init_kdata(opts->kmer)) == NULL)
+		goto exit;
+	for(uint64_t i=0; i<enr->num_enrichments; i++) {
+		data->kmers[i].kmer = enr->enrichments[i].key;
+		data->kmers[i].rval = enr->enrichments[i].enrichment;
+	}
+
+exit:
+	katss_free_enrichments(enr);
+	return data;
 }
 
 static KatssData *
