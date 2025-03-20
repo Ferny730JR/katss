@@ -259,7 +259,31 @@ int katss_recount_kmer(KatssCounter *counter, const char *filename, const char *
  * @param threads 
  * @return int 
  */
-int katss_recount_kmer_mt(KatssCounter *counter, const char *filename, const char *remove, int threads);
+int katss_recount_kmer_mt(
+	KatssCounter *counter,
+	const char *filename,
+	const char *remove,
+	int threads);
+
+
+/**
+ * @brief Recount all shuffled k-mers in a KatssCounter
+ * 
+ * Sets all current counts in *counter to 0 then counts the kmers in `file`
+ * excluding the kmer specified by `remove`. The kmers counted will not be
+ * the exact sequence, but a shuffled sequence that preserves the klet counts.
+ * The KatssCounter will store the string `remove` in memory such that all
+ * subsequent calls to recount_kmer functions will also remove previously
+ * removed kmers.
+ * 
+ * @param counter KatssCounter to recount shuffled k-mers
+ * @param klet    Length of k-let to preserve in sequence
+ * @param file    File containing the sequences
+ * @param remove  K-mer to not include in the counts
+ * @return int 
+ */
+int
+katss_recount_kmer_shuffle(KatssCounter *counter, const char *file, int klet, const char *remove);
 
 
 /**

@@ -14,6 +14,7 @@
 #include "memory_utils.h"
 #include "seqfile.h"
 #include "seqseq.h"
+#include "ushuffle.h"
 
 #define BUFFER_SIZE 65536U
 
@@ -92,6 +93,80 @@ katss_recount_kmer(KatssCounter *counter, const char *filename, const char *remo
 	/* Cleanup */
 	free(hasher);
 	free(buffer);
+	seqfclose(read_file);
+
+	return ret;
+}
+
+int
+katss_recount_kmer_shuffle(KatssCounter *counter, const char *file, int klet, const char *remove)
+{
+	int ret = 0;
+	char filetype = determine_filetype(file);
+	if(filetype == 'e' || filetype == 'N')
+		return 1;
+
+	/* Clear counter */
+	uint64_t total = ((uint64_t)counter->capacity) + 1;
+	if(counter->kmer <= 12)
+		memset(counter->table.small,  0x00, total * sizeof(uint64_t));
+	else
+		memset(counter->table.medium, 0x00, total * sizeof(uint32_t));
+	
+	/* Push kmer to remove to counter */
+	kctr_push(counter, remove);
+
+	/* Open SeqFile for reading */
+	char mode[2] = { 0 };
+	mode[0] = filetype == 'r' ? 's' : filetype;
+	SeqFile read_file = seqfopen(file, mode);
+	if(read_file == NULL) { /* Error opening SeqFile */
+		error_message("katss: seqfopen: %s\n", seqfstrerror(seqferrno));
+		return 2;
+	}
+
+	/* Initialize hasher */
+	KatssHasher *hasher = katss_init_hasher(counter->kmer, filetype);
+	if(hasher == NULL) {
+		seqfclose(read_file);
+		return 3;
+	}
+
+	char *buffer = s_malloc(BUFFER_SIZE);
+	char *shuf   = s_malloc(BUFFER_SIZE);
+	size_t still_reading;
+	uint32_t hash_value;
+
+	/* Begin recounting */
+	srand(1); // reset seed for ushuffle
+	while(seqfgets_unlocked(read_file, buffer, BUFFER_SIZE)) {
+		/* Shuffle the sequence */
+		shuffle(buffer, shuf, strlen(buffer), klet);
+
+		/* Remove sequences in line */
+		katss_str_node_t *cur = counter->removed;
+		while(cur != NULL) {
+			cross_out(buffer, cur->str, filetype);
+			cur = cur->next;
+		}
+
+		/* Count the kemrs */
+		katss_set_seq(hasher, shuf, filetype);
+		while(katss_get_fh(hasher, &hash_value, filetype)) {
+			katss_increment(counter, hash_value);
+		}
+	}
+
+	/* If error was encountered while reading report and return NULL */
+	if(seqferrno) {
+		ret = 4;
+		error_message("katss: %d: %s", seqferrno, seqfstrerror(seqferrno));
+	}
+
+	/* Cleanup */
+	free(hasher);
+	free(buffer);
+	free(shuf);
 	seqfclose(read_file);
 
 	return ret;
