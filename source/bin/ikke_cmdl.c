@@ -58,6 +58,10 @@ const char *ikke_args_info_detailed_help[] = {
   "  Select additional algorithms to determine the calculations.\n",
   "  -R, --enrichments        Compute the regular enrichments.  (default=off)",
   "  This algorithm calculates the R value from all k-mer frequencies in the given\n  files.\n",
+  "  -s, --shuffle            Shuffle the sequences while preserving k-let count.\n                             (default=off)",
+  "  ",
+  "      --klet=INT           Specify the k-let to be used by ushuffle\n                             (default=`-1')",
+  "  ",
   "  -p, --independent-probs  Calculate the enrichments without the input reads.\n                             (default=off)",
   "  Using the dinucleotide and mononucleotide frequencies of the target data,\n  ikke can make an accurate prediction as to what the enrichment values should\n  be. As such, when computing the actual frequencies for all k-mers, the values\n  that deviate the most from the predictions are the most significant, and are\n  used to discover the motif.\n",
   "  -b, --bootstrap[=INT]    Bootstrap the enrichments the specified number of\n                             times.  (default=`10')",
@@ -89,11 +93,13 @@ init_help_array(void)
   ikke_args_info_help[16] = ikke_args_info_detailed_help[25];
   ikke_args_info_help[17] = ikke_args_info_detailed_help[27];
   ikke_args_info_help[18] = ikke_args_info_detailed_help[29];
-  ikke_args_info_help[19] = 0; 
+  ikke_args_info_help[19] = ikke_args_info_detailed_help[31];
+  ikke_args_info_help[20] = ikke_args_info_detailed_help[33];
+  ikke_args_info_help[21] = 0; 
   
 }
 
-const char *ikke_args_info_help[20];
+const char *ikke_args_info_help[22];
 
 typedef enum {ARG_NO
   , ARG_FLAG
@@ -129,6 +135,8 @@ void clear_given (struct ikke_args_info *args_info)
   args_info->delimiter_given = 0 ;
   args_info->no_log_given = 0 ;
   args_info->enrichments_given = 0 ;
+  args_info->shuffle_given = 0 ;
+  args_info->klet_given = 0 ;
   args_info->independent_probs_given = 0 ;
   args_info->bootstrap_given = 0 ;
   args_info->sample_given = 0 ;
@@ -154,6 +162,9 @@ void clear_args (struct ikke_args_info *args_info)
   args_info->delimiter_orig = NULL;
   args_info->no_log_flag = 0;
   args_info->enrichments_flag = 0;
+  args_info->shuffle_flag = 0;
+  args_info->klet_arg = -1;
+  args_info->klet_orig = NULL;
   args_info->independent_probs_flag = 0;
   args_info->bootstrap_arg = 10;
   args_info->bootstrap_orig = NULL;
@@ -179,9 +190,11 @@ void init_args_info(struct ikke_args_info *args_info)
   args_info->delimiter_help = ikke_args_info_detailed_help[17] ;
   args_info->no_log_help = ikke_args_info_detailed_help[19] ;
   args_info->enrichments_help = ikke_args_info_detailed_help[23] ;
-  args_info->independent_probs_help = ikke_args_info_detailed_help[25] ;
-  args_info->bootstrap_help = ikke_args_info_detailed_help[27] ;
-  args_info->sample_help = ikke_args_info_detailed_help[29] ;
+  args_info->shuffle_help = ikke_args_info_detailed_help[25] ;
+  args_info->klet_help = ikke_args_info_detailed_help[27] ;
+  args_info->independent_probs_help = ikke_args_info_detailed_help[29] ;
+  args_info->bootstrap_help = ikke_args_info_detailed_help[31] ;
+  args_info->sample_help = ikke_args_info_detailed_help[33] ;
   
 }
 
@@ -291,6 +304,7 @@ ikke_cmdline_parser_release (struct ikke_args_info *args_info)
   free_string_field (&(args_info->threads_orig));
   free_string_field (&(args_info->delimiter_arg));
   free_string_field (&(args_info->delimiter_orig));
+  free_string_field (&(args_info->klet_orig));
   free_string_field (&(args_info->bootstrap_orig));
   free_string_field (&(args_info->sample_orig));
   
@@ -347,6 +361,10 @@ ikke_cmdline_parser_dump(FILE *outfile, struct ikke_args_info *args_info)
     write_into_file(outfile, "no-log", 0, 0 );
   if (args_info->enrichments_given)
     write_into_file(outfile, "enrichments", 0, 0 );
+  if (args_info->shuffle_given)
+    write_into_file(outfile, "shuffle", 0, 0 );
+  if (args_info->klet_given)
+    write_into_file(outfile, "klet", args_info->klet_orig, 0);
   if (args_info->independent_probs_given)
     write_into_file(outfile, "independent-probs", 0, 0 );
   if (args_info->bootstrap_given)
@@ -1222,6 +1240,8 @@ ikke_cmdline_parser_internal (
         { "delimiter",	1, NULL, 'd' },
         { "no-log",	0, NULL, 0 },
         { "enrichments",	0, NULL, 'R' },
+        { "shuffle",	0, NULL, 's' },
+        { "klet",	1, NULL, 0 },
         { "independent-probs",	0, NULL, 'p' },
         { "bootstrap",	2, NULL, 'b' },
         { "sample",	1, NULL, 0 },
@@ -1233,7 +1253,7 @@ ikke_cmdline_parser_internal (
       custom_opterr = opterr;
       custom_optopt = optopt;
 
-      c = custom_getopt_long (argc, argv, "hVt:c:o:k:i:d:Rpb::", long_options, &option_index);
+      c = custom_getopt_long (argc, argv, "hVt:c:o:k:i:d:Rspb::", long_options, &option_index);
 
       optarg = custom_optarg;
       optind = custom_optind;
@@ -1336,6 +1356,16 @@ ikke_cmdline_parser_internal (
             goto failure;
         
           break;
+        case 's':	/* Shuffle the sequences while preserving k-let count..  */
+        
+        
+          if (update_arg((void *)&(args_info->shuffle_flag), 0, &(args_info->shuffle_given),
+              &(local_args_info.shuffle_given), optarg, 0, 0, ARG_FLAG,
+              check_ambiguity, override, 1, 0, "shuffle", 's',
+              additional_error))
+            goto failure;
+        
+          break;
         case 'p':	/* Calculate the enrichments without the input reads..  */
         
         
@@ -1388,6 +1418,20 @@ ikke_cmdline_parser_internal (
             if (update_arg((void *)&(args_info->no_log_flag), 0, &(args_info->no_log_given),
                 &(local_args_info.no_log_given), optarg, 0, 0, ARG_FLAG,
                 check_ambiguity, override, 1, 0, "no-log", '-',
+                additional_error))
+              goto failure;
+          
+          }
+          /* Specify the k-let to be used by ushuffle.  */
+          else if (strcmp (long_options[option_index].name, "klet") == 0)
+          {
+          
+          
+            if (update_arg( (void *)&(args_info->klet_arg), 
+                 &(args_info->klet_orig), &(args_info->klet_given),
+                &(local_args_info.klet_given), optarg, 0, "-1", ARG_INT,
+                check_ambiguity, override, 0, 0,
+                "klet", '-',
                 additional_error))
               goto failure;
           

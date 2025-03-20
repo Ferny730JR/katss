@@ -65,6 +65,11 @@ struct ikke_args_info
   const char *no_log_help; /**< @brief Don't normalize enrichments to log2. help description.  */
   int enrichments_flag;	/**< @brief Compute the regular enrichments. (default=off).  */
   const char *enrichments_help; /**< @brief Compute the regular enrichments. help description.  */
+  int shuffle_flag;	/**< @brief Shuffle the sequences while preserving k-let count. (default=off).  */
+  const char *shuffle_help; /**< @brief Shuffle the sequences while preserving k-let count. help description.  */
+  int klet_arg;	/**< @brief Specify the k-let to be used by ushuffle (default='-1').  */
+  char * klet_orig;	/**< @brief Specify the k-let to be used by ushuffle original value given at command line.  */
+  const char *klet_help; /**< @brief Specify the k-let to be used by ushuffle help description.  */
   int independent_probs_flag;	/**< @brief Calculate the enrichments without the input reads. (default=off).  */
   const char *independent_probs_help; /**< @brief Calculate the enrichments without the input reads. help description.  */
   int bootstrap_arg;	/**< @brief Bootstrap the enrichments the specified number of times. (default='10').  */
@@ -86,6 +91,8 @@ struct ikke_args_info
   unsigned int delimiter_given ;	/**< @brief Whether delimiter was given.  */
   unsigned int no_log_given ;	/**< @brief Whether no-log was given.  */
   unsigned int enrichments_given ;	/**< @brief Whether enrichments was given.  */
+  unsigned int shuffle_given ;	/**< @brief Whether shuffle was given.  */
+  unsigned int klet_given ;	/**< @brief Whether klet was given.  */
   unsigned int independent_probs_given ;	/**< @brief Whether independent-probs was given.  */
   unsigned int bootstrap_given ;	/**< @brief Whether bootstrap was given.  */
   unsigned int sample_given ;	/**< @brief Whether sample was given.  */

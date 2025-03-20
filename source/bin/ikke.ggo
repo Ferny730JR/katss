@@ -106,6 +106,19 @@ details="This algorithm calculates the R value from all k-mer frequencies in\
 flag
 off
 
+option "shuffle" s
+"Shuffle the sequences while preserving k-let count."
+details=""
+flag
+off
+
+option "klet" -
+"Specify the k-let to be used by ushuffle"
+details=""
+int
+default="-1"
+optional
+
 option "independent-probs" p
 "Calculate the enrichments without the input reads."
 details="Using the dinucleotide and mononucleotide frequencies of the target\
