@@ -326,6 +326,62 @@ exit:
 	return enrichments;
 }
 
+KatssEnrichments *
+katss_ikke_shuffle(const char *test, const char *ctrl, int kmer, int klet, uint64_t iterations, bool normalize)
+{
+	KatssEnrichments *enrichments = NULL;
+
+	/* Get the counts for the test_file */
+	KatssCounter *test_counts = katss_count_kmers_ushuffle(test, kmer, klet);
+	if(test_counts == NULL)
+		goto exit;
+
+	/* Get the counts for the control file */
+	KatssCounter *ctrl_counts = katss_count_kmers_ushuffle(ctrl, kmer, klet);
+	if(ctrl_counts == NULL)
+		goto cleanup_ctrl;
+
+	/* Create enrichments struct */
+	enrichments = s_malloc(sizeof *enrichments);
+	if(iterations > test_counts->capacity)
+		iterations = ((uint64_t)test_counts->capacity) + 1;
+	enrichments->enrichments = s_malloc(iterations * sizeof *enrichments->enrichments);
+	enrichments->num_enrichments = iterations;
+
+	/* Get the first top kmer */
+	enrichments->enrichments[0] = katss_top_enrichment(test_counts, ctrl_counts, normalize);
+
+	/* Subsequent iterations begin uncounting */
+	for(uint64_t i=1; i<iterations; i++) {
+		char kseq[17];
+		katss_unhash(kseq, enrichments->enrichments[i-1].key, test_counts->kmer, true);
+		katss_recount_kmer_shuffle(test_counts, test, klet, kseq);
+		katss_recount_kmer_shuffle(ctrl_counts, ctrl, klet, kseq);
+		enrichments->enrichments[i] = katss_top_enrichment(test_counts, ctrl_counts, normalize);
+	}
+
+	katss_free_counter(ctrl_counts);
+cleanup_ctrl:
+	katss_free_counter(test_counts);
+exit:
+	return enrichments;
+}
+
+KatssEnrichments *
+katss_ikke_shuffle_mt(const char *test, const char *ctrl, int kmer, int klet, uint64_t iterations, bool normalize, int threads)
+{
+	if(threads == 1)
+		katss_ikke_shuffle(test, ctrl, kmer, klet, iterations, normalize);
+
+	// TODO: Implementation
+	// Multithreaded shuffle function will not work as is since `shuffle` function
+	// provided by the ushuffle.c library is not thread-safe. To fix this, we
+	// need to replace the rand() functions with a thread-safe version of it,
+	// or require shuffle() functions to take a seed (prefered).
+	error_message("This function is not yet implemented");
+	return NULL;
+}
+
 /*==================================================================================================
 |                                         Helper Functions                                         |
 ==================================================================================================*/

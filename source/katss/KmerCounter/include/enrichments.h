@@ -32,6 +32,8 @@ KatssEnrichments *katss_ikke_mt(const char *test_file, const char *control_file,
 KatssEnrichments *katss_ikke_(const char *test_file, const char *control_file, unsigned int kmer, uint64_t iterations, bool normalize);
 KatssEnrichments *katss_prob_ikke_mt(const char *test_file, unsigned int kmer, uint64_t iterations, bool normalize, int threads);
 KatssEnrichments *katss_prob_ikke(const char *test_file, unsigned int kmer, uint64_t iterations, bool normalize);
+KatssEnrichments *katss_ikke_shuffle(const char *test, const char *ctrl, int kmer, int klet, uint64_t iterations, bool normalize);
+KatssEnrichments *katss_ikke_shuffle_mt(const char *test, const char *ctrl, int kmer, int klet, uint64_t iterations, bool normalize, int threads);
 
 KatssEnrichment katss_top_enrichment(KatssCounter *test, KatssCounter *control, bool normalize);
 KatssEnrichment katss_top_prediction(KatssCounter *test, KatssCounter *mono, KatssCounter *dint, bool normalize);
