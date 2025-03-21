@@ -410,7 +410,9 @@ katss_count_kmers_ushuffle(const char *filename, unsigned int kmer, int klet)
 
 	srand(1); // reset rand seed for shuffle
 	while(seqfgets_unlocked(read_file, buffer, BUFFER_SIZE)) {
-		shuffle(buffer, shuf, (int)strlen(buffer), klet);
+		int seqlen = strlen(buffer);
+		shuffle(buffer, shuf, seqlen, klet);
+		shuf[seqlen] = '\0';
 		katss_set_seq(hasher, shuf, 'r');
 		while(katss_get_fh(hasher, &hash_value, 'r')) {
 			katss_increment(counter, hash_value);
@@ -484,9 +486,13 @@ katss_count_kmers_ushuffle_bootstrap(const char *filename, unsigned int kmer,
 
 	srand(1); // reset rand seed for shuffle
 	while(seqfgets_unlocked(read_file, buffer, BUFFER_SIZE)) {
+		/* Pick random sequences */
 		if(rand_r(seed) % 100000 >= sample)
 			continue;
+		/* Shuffle sequences */
+		int seqlen = strlen(buffer);
 		shuffle(buffer, shuf, strlen(buffer), klet);
+		shuf[seqlen] = '\0'; // add null terminator since shuffle uses strncpy
 		katss_set_seq(hasher, shuf, 'r');
 		while(katss_get_fh(hasher, &hash_value, 'r')) {
 			katss_increment(counter, hash_value);

@@ -141,7 +141,9 @@ katss_recount_kmer_shuffle(KatssCounter *counter, const char *file, int klet, co
 	srand(1); // reset seed for ushuffle
 	while(seqfgets_unlocked(read_file, buffer, BUFFER_SIZE)) {
 		/* Shuffle the sequence */
-		shuffle(buffer, shuf, strlen(buffer), klet);
+		int seqlen = strlen(buffer);
+		shuffle(buffer, shuf, seqlen, klet);
+		shuf[seqlen] = '\0'; // null terminate shuf since shuffle uses strncpy
 
 		/* Remove sequences in line */
 		katss_str_node_t *cur = counter->removed;
