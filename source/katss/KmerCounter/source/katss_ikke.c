@@ -54,7 +54,22 @@ exit:
 static KatssData *
 ushuffle(const char *test, KatssOptions *opts)
 {
-	return NULL;
+	KatssEnrichments *enr;
+	enr = katss_ikke_shuffle(test, NULL, opts->kmer, opts->probs_ntprec, opts->iters, opts->normalize);
+	if(enr == NULL)
+		return NULL;
+	
+	KatssData *data = katss_init_kdata(opts->kmer);
+	if(data == NULL)
+		goto exit;
+	for(uint64_t i=0; i<enr->num_enrichments; i++) {
+		data->kmers[i].kmer = enr->enrichments[i].key;
+		data->kmers[i].rval = enr->enrichments[i].enrichment;
+	}
+
+exit:
+	katss_free_enrichments(enr);
+	return data;
 }
 
 static KatssData *
