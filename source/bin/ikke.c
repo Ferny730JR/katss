@@ -4,12 +4,12 @@
 #include <string.h>
 #include <math.h>
 
-#include "enrichments.h"
-#include "bootstrap.h"
 #include "hash_functions.h"
 #include "ikke_cmdl.h"
 #include "memory_utils.h"
 #include "string_utils.h"
+
+#include "katss.h"
 
 typedef struct Options {
 	char *test_file;    /** Name of test file */
@@ -23,14 +23,13 @@ typedef struct Options {
 	bool no_log;        /** Don't normalize outputs to log2 */
 
 	bool enrichments;   /** Compute regular enrichments */
+	bool shuffle;       /** Shuffle the sequences */
+	int  klet;          /** Length of k-let to preserve during shuffling */
 	bool probabilistic; /** Enable probabilistic enrichments */
 	bool bootstrap;     /** Enable bootstrap */
 	int  bs_runs;       /** Bootstrap iterations to perform */
 	int  sample;        /** Percent of file to sample */
 } Options;
-
-void
-process_bootstrap(Options *opts);
 
 char 
 delimiter_to_char(char *user_delimiter);
@@ -39,10 +38,7 @@ int
 set_out_file(Options *opt, char *name);
 
 void
-enrichments_to_file(KatssEnrichments *enrichments, Options *opt);
-
-void
-bootstrap_to_file(KatssBootstrap *bootstrap, Options *opts);
+katssdata_to_file(KatssData *data, Options *opt);
 
 void
 options_free(Options *opt);
@@ -108,6 +104,8 @@ main(int argc, char *argv[])
 	opt.sample        = args_info.sample_arg;
 	opt.bs_runs       = args_info.bootstrap_arg;
 	opt.bootstrap     = args_info.bootstrap_given;
+	opt.klet          = args_info.klet_arg;
+	opt.shuffle       = (bool)args_info.shuffle_flag;
 	opt.no_log        = (bool)args_info.no_log_flag;
 	opt.enrichments   = (bool)args_info.enrichments_flag;
 	opt.probabilistic = (bool)args_info.independent_probs_flag;
@@ -147,31 +145,52 @@ main(int argc, char *argv[])
 		opt.sample = 10;
 	}
 
+	if(opt.no_log)
+		warning_message("ikke: option --no-log is being ignored. Values are no longer normalized to log2");
+	opt.no_log = true;
+
 	ikke_cmdline_parser_free(&args_info);
 
-	/* Begin actual computations */
-	if(opt.bootstrap) {
-		process_bootstrap(&opt);
+	/* Specify all the katss options */
+	KatssOptions katss_opts;
+	katss_init_options(&katss_opts);
+
+	katss_opts.kmer = opt.kmer;
+	katss_opts.iters = opt.iterations;
+	katss_opts.threads = opt.threads;
+	katss_opts.normalize = !opt.no_log;
+	katss_opts.sort_enrichments = true;
+	katss_opts.bootstrap_iters = opt.bootstrap ? opt.bs_runs : 0;
+	katss_opts.bootstrap_sample = opt.sample*1000;
+	katss_opts.probs_ntprec = opt.klet;
+	katss_opts.seed = 1;
+	if(opt.probabilistic && opt.shuffle) {
+		katss_opts.probs_algo = KATSS_PROBS_BOTH;
+	} else if(opt.probabilistic) {
+		katss_opts.probs_algo = KATSS_PROBS_REGULAR;
+	} else if(opt.shuffle) {
+		katss_opts.probs_algo = KATSS_PROBS_USHUFFLE;
 	} else {
-	KatssEnrichments *enr;
-		if(opt.enrichments && opt.probabilistic)
-			enr = katss_prob_enrichments(opt.test_file, opt.kmer, !opt.no_log);
-		else if(opt.enrichments)
-			enr = katss_enrichments(opt.test_file, opt.ctrl_file, opt.kmer, !opt.no_log);
-		else if(opt.probabilistic)
-			enr = katss_prob_ikke(opt.test_file, opt.kmer, opt.iterations, !opt.no_log);
-		else
-			enr = katss_ikke_(opt.test_file, opt.ctrl_file, opt.kmer, opt.iterations, !opt.no_log);
-
-		/* Check results */
-		if(enr == NULL)
-			goto cleanup_opts;
-
-		enrichments_to_file(enr, &opt);
-		katss_free_enrichments(enr);
+		katss_opts.probs_algo = KATSS_PROBS_NONE;
 	}
 
+	/* Begin actual computations */
+	KatssData *data = NULL;
+	if(opt.enrichments) {
+		data = katss_enrichment(opt.test_file, opt.ctrl_file, &katss_opts);
+	} else {
+		data = katss_ikke(opt.test_file, opt.ctrl_file, &katss_opts);
+	}
+
+	/* Failed to get enrichments */
+	if(data == NULL)
+		goto cleanup_opts;
+
+	/* Output data into a file */
+	katssdata_to_file(data, &opt);
+
 	/* Everything seemed to work! Cleanup and return */
+	katss_free_kdata(data);
 	options_free(&opt);
 	return 0;
 
@@ -183,40 +202,6 @@ exit_error:
 	exit(EXIT_FAILURE);
 }
 
-void
-process_bootstrap(Options *opts)
-{
-	/* Sanity check... */
-	if(!opts->bootstrap) {
-		error_message("Bootstrap not enabled, even though it appeared that it was.");
-		return;
-	}
-	if(!opts->enrichments) {
-		error_message("Bootstrap currently does not support ikke. Add the '-R' option instead.");
-		return;
-	}
-
-	/* Declare bootstrap and its options */
-	KatssBootstrap *bootstrap;
-	KatssOptions bootstrap_opts;
-
-	/* Initialize default options, then populate it with params */
-	katss_init_default_opts(&bootstrap_opts);
-	bootstrap_opts.algo          = opts->enrichments ? enrichments : ikke;
-	bootstrap_opts.bs_iters      = opts->bs_runs;
-	bootstrap_opts.ikke_iters    = opts->iterations;
-	bootstrap_opts.kmer          = opts->kmer;
-	bootstrap_opts.probabilistic = opts->probabilistic;
-	bootstrap_opts.sample        = opts->sample;
-	bootstrap_opts.threads       = opts->threads;
-
-	/* Process bootstrap */
-	bootstrap = katss_bootstrap(opts->test_file, opts->ctrl_file, &bootstrap_opts);
-	if(bootstrap == NULL)
-		return; /* error encountered, don't output to file */
-	
-	bootstrap_to_file(bootstrap, opts);
-}
 
 char 
 delimiter_to_char(char *user_delimiter)
@@ -272,30 +257,32 @@ set_out_file(Options *opt, char *name)
 }
 
 void
-enrichments_to_file(KatssEnrichments *enrichments, Options *opt)
+katssdata_to_file(KatssData *data, Options *opt)
 {
-	fprintf(opt->out_file, "kmer%crval\n", opt->delimiter);
-	char kseq[17];
-	for(uint64_t i = 0; i < enrichments->num_enrichments; i++) {
-		double rval = enrichments->enrichments[i].enrichment;
+	/* Print the header */
+	if(opt->bootstrap) {
+		fprintf(opt->out_file, "kmer%crval%cstdev%cpval\n",
+		  opt->delimiter, opt->delimiter, opt->delimiter);
+	} else {
+		fprintf(opt->out_file, "kmer%crval\n",opt->delimiter);
+	}
+
+	char kseq[32];
+	for(uint64_t i=0; i<data->num_kmers; i++) {
+		double rval = data->kmers[i].rval;
 		if(isnan(rval))
 			continue;
-		katss_unhash(kseq, enrichments->enrichments[i].key, opt->kmer, true);
-		fprintf(opt->out_file, "%s%c%f\n", kseq, opt->delimiter, rval);
+		katss_unhash(kseq, data->kmers[i].kmer, opt->kmer, true);
+		if(opt->bootstrap) {
+			fprintf(opt->out_file, "%s%c%f%c%f%c%E\n", kseq, opt->delimiter,
+			  rval, opt->delimiter, data->kmers[i].stdev, opt->delimiter,
+			  data->kmers[i].pval);
+		} else {
+			fprintf(opt->out_file, "%s%c%f\n", kseq, opt->delimiter, rval);
+		}
 	}
 }
 
-void
-bootstrap_to_file(KatssBootstrap *bootstrap, Options *opts)
-{
-	fprintf(opts->out_file, "kmer%cmean%cstdev\n", opts->delimiter, opts->delimiter);
-	char kseq[17];
-	for(uint64_t i = 0; i < bootstrap->total; i++) {
-		katss_unhash(kseq, bootstrap->data[i].kmer_hash, opts->kmer, true);
-		fprintf(opts->out_file, "%s%c%f%c%f\n", kseq, opts->delimiter,
-		 bootstrap->data[i].mean, opts->delimiter, bootstrap->data[i].stdev);
-	}
-}
 
 void
 options_free(Options *opt)
