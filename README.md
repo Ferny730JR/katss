@@ -26,6 +26,7 @@ The tools allow you to:
 KATSS uses CMake to install the programs. In order to compile from source, the following dependencies are required:
 * ```ViennaRNA```, for RNA structure prediction
 * ```zlib``` OR ```ISA-L```, to read from compressed files
+* ```CMake >= 3.9.0```, the build toolchain used by katss
 
 ### Quick Start
 
@@ -67,7 +68,7 @@ ikke --detailed-help
 
 ## Example Usage
 
-### `bppPipeline`
+### `kstruct`
 
 ```bash
 kstruct -i control_sequences.fastq.gz -b bound_sequences.fastq.gz -o output.csv -k 3
