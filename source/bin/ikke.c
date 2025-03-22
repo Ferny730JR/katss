@@ -29,6 +29,7 @@ typedef struct Options {
 	bool bootstrap;     /** Enable bootstrap */
 	int  bs_runs;       /** Bootstrap iterations to perform */
 	int  sample;        /** Percent of file to sample */
+	int  seed;          /** Seed to be used by bootstrap */
 } Options;
 
 char 
@@ -105,6 +106,7 @@ main(int argc, char *argv[])
 	opt.bs_runs       = args_info.bootstrap_arg;
 	opt.bootstrap     = args_info.bootstrap_given;
 	opt.klet          = args_info.klet_arg;
+	opt.seed          = args_info.seed_arg;
 	opt.shuffle       = (bool)args_info.shuffle_flag;
 	opt.no_log        = (bool)args_info.no_log_flag;
 	opt.enrichments   = (bool)args_info.enrichments_flag;
@@ -163,7 +165,7 @@ main(int argc, char *argv[])
 	katss_opts.bootstrap_iters = opt.bootstrap ? opt.bs_runs : 0;
 	katss_opts.bootstrap_sample = opt.sample*1000;
 	katss_opts.probs_ntprec = opt.klet;
-	katss_opts.seed = 1;
+	katss_opts.seed = opt.seed;
 	if(opt.probabilistic && opt.shuffle) {
 		katss_opts.probs_algo = KATSS_PROBS_BOTH;
 	} else if(opt.probabilistic) {
