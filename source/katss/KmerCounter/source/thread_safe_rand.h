@@ -1,7 +1,11 @@
 #ifndef THREAD_SAFE_RAND_H
 #define THREAD_SAFE_RAND_H
 
-#include "tinycthread.h"
+#if (__STDC_NO_THREADS__)
+#  include "tinycthread.h"
+#else
+#  include <threads.h>
+#endif
 
 struct thread_safe_rand_t {
 	mtx_t lock;
