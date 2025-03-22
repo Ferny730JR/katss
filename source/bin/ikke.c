@@ -117,7 +117,7 @@ main(int argc, char *argv[])
 		goto cleanup_args;
 	}
 
-	if(opt.ctrl_file == NULL && !opt.probabilistic) {
+	if(opt.ctrl_file == NULL && !opt.probabilistic && !opt.shuffle) {
 		error_message("You need to provide a control file");
 		goto cleanup_args;
 	}
