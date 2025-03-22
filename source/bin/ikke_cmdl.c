@@ -68,6 +68,8 @@ const char *ikke_args_info_detailed_help[] = {
   "  This calculates the enrichments from a randomly subsampled (by default 10%)\n  region from the provided sequences. It then repeats this process the\n  specified number of times, calculates the mean enrichments from the\n  subsampled sequences, and the standard deviation.\n",
   "      --sample=INT         Percent to randomly subsample sequences from the\n                             test and control files.  (default=`10')",
   "  Should be a number between 1 and 100. By default, katss subsamples 10% of the\n  files (equivalent to `--sample=10`).",
+  "      --seed=INT           Specify the seed to be used by bootstrap\n                             (default=`-1')",
+  "  Since bootstrap subsamples random sequences, seeding alters which random\n  sequences will be picked. This helps to ensure deterministic output which can\n  be achieved by using the same seed. To pick a random seed, set `seed=-1`.",
     0
 };
 
@@ -95,11 +97,12 @@ init_help_array(void)
   ikke_args_info_help[18] = ikke_args_info_detailed_help[29];
   ikke_args_info_help[19] = ikke_args_info_detailed_help[31];
   ikke_args_info_help[20] = ikke_args_info_detailed_help[33];
-  ikke_args_info_help[21] = 0; 
+  ikke_args_info_help[21] = ikke_args_info_detailed_help[35];
+  ikke_args_info_help[22] = 0; 
   
 }
 
-const char *ikke_args_info_help[22];
+const char *ikke_args_info_help[23];
 
 typedef enum {ARG_NO
   , ARG_FLAG
@@ -140,6 +143,7 @@ void clear_given (struct ikke_args_info *args_info)
   args_info->independent_probs_given = 0 ;
   args_info->bootstrap_given = 0 ;
   args_info->sample_given = 0 ;
+  args_info->seed_given = 0 ;
 }
 
 static
@@ -170,6 +174,8 @@ void clear_args (struct ikke_args_info *args_info)
   args_info->bootstrap_orig = NULL;
   args_info->sample_arg = 10;
   args_info->sample_orig = NULL;
+  args_info->seed_arg = -1;
+  args_info->seed_orig = NULL;
   
 }
 
@@ -195,6 +201,7 @@ void init_args_info(struct ikke_args_info *args_info)
   args_info->independent_probs_help = ikke_args_info_detailed_help[29] ;
   args_info->bootstrap_help = ikke_args_info_detailed_help[31] ;
   args_info->sample_help = ikke_args_info_detailed_help[33] ;
+  args_info->seed_help = ikke_args_info_detailed_help[35] ;
   
 }
 
@@ -307,6 +314,7 @@ ikke_cmdline_parser_release (struct ikke_args_info *args_info)
   free_string_field (&(args_info->klet_orig));
   free_string_field (&(args_info->bootstrap_orig));
   free_string_field (&(args_info->sample_orig));
+  free_string_field (&(args_info->seed_orig));
   
   
 
@@ -371,6 +379,8 @@ ikke_cmdline_parser_dump(FILE *outfile, struct ikke_args_info *args_info)
     write_into_file(outfile, "bootstrap", args_info->bootstrap_orig, 0);
   if (args_info->sample_given)
     write_into_file(outfile, "sample", args_info->sample_orig, 0);
+  if (args_info->seed_given)
+    write_into_file(outfile, "seed", args_info->seed_orig, 0);
   
 
   i = EXIT_SUCCESS;
@@ -1245,6 +1255,7 @@ ikke_cmdline_parser_internal (
         { "independent-probs",	0, NULL, 'p' },
         { "bootstrap",	2, NULL, 'b' },
         { "sample",	1, NULL, 0 },
+        { "seed",	1, NULL, 0 },
         { 0,  0, 0, 0 }
       };
 
@@ -1446,6 +1457,20 @@ ikke_cmdline_parser_internal (
                 &(local_args_info.sample_given), optarg, 0, "10", ARG_INT,
                 check_ambiguity, override, 0, 0,
                 "sample", '-',
+                additional_error))
+              goto failure;
+          
+          }
+          /* Specify the seed to be used by bootstrap.  */
+          else if (strcmp (long_options[option_index].name, "seed") == 0)
+          {
+          
+          
+            if (update_arg( (void *)&(args_info->seed_arg), 
+                 &(args_info->seed_orig), &(args_info->seed_given),
+                &(local_args_info.seed_given), optarg, 0, "-1", ARG_INT,
+                check_ambiguity, override, 0, 0,
+                "seed", '-',
                 additional_error))
               goto failure;
           

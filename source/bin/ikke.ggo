@@ -147,3 +147,13 @@ details="Should be a number between 1 and 100. By default, katss subsamples 10%\
 int
 default="10"
 optional
+
+option "seed" -
+"Specify the seed to be used by bootstrap"
+details="Since bootstrap subsamples random sequences, seeding alters which\
+ random sequences will be picked. This helps to ensure deterministic output\
+ which can be achieved by using the same seed. To pick a random seed, set\
+ `seed=-1`."
+int
+default="-1"
+optional

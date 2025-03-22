@@ -78,6 +78,9 @@ struct ikke_args_info
   int sample_arg;	/**< @brief Percent to randomly subsample sequences from the test and control files. (default='10').  */
   char * sample_orig;	/**< @brief Percent to randomly subsample sequences from the test and control files. original value given at command line.  */
   const char *sample_help; /**< @brief Percent to randomly subsample sequences from the test and control files. help description.  */
+  int seed_arg;	/**< @brief Specify the seed to be used by bootstrap (default='-1').  */
+  char * seed_orig;	/**< @brief Specify the seed to be used by bootstrap original value given at command line.  */
+  const char *seed_help; /**< @brief Specify the seed to be used by bootstrap help description.  */
   
   unsigned int help_given ;	/**< @brief Whether help was given.  */
   unsigned int detailed_help_given ;	/**< @brief Whether detailed-help was given.  */
@@ -96,6 +99,7 @@ struct ikke_args_info
   unsigned int independent_probs_given ;	/**< @brief Whether independent-probs was given.  */
   unsigned int bootstrap_given ;	/**< @brief Whether bootstrap was given.  */
   unsigned int sample_given ;	/**< @brief Whether sample was given.  */
+  unsigned int seed_given ;	/**< @brief Whether seed was given.  */
 
 } ;
 
