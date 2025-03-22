@@ -12,7 +12,7 @@ katss_init_options(KatssOptions *opts)
 	opts->kmer = 0;
 	opts->iters = 1;
 	opts->threads = 1;
-	opts->normalize = true;
+	opts->normalize = false;
 	opts->sort_enrichments = true;
 
 	opts->bootstrap_iters = 0;
