@@ -332,7 +332,7 @@ katss_ikke_shuffle(const char *test, const char *ctrl, int kmer, int klet, uint6
 	KatssEnrichments *enrichments = NULL;
 
 	/* Get the counts for the test_file */
-	KatssCounter *test_counts = katss_count_kmers_ushuffle(test, kmer, klet);
+	KatssCounter *test_counts = katss_count_kmers(test, kmer);
 	if(test_counts == NULL)
 		goto exit;
 
@@ -355,7 +355,7 @@ katss_ikke_shuffle(const char *test, const char *ctrl, int kmer, int klet, uint6
 	for(uint64_t i=1; i<iterations; i++) {
 		char kseq[17];
 		katss_unhash(kseq, enrichments->enrichments[i-1].key, test_counts->kmer, true);
-		katss_recount_kmer_shuffle(test_counts, test, klet, kseq);
+		katss_recount_kmer(test_counts, test, kseq);
 		katss_recount_kmer_shuffle(ctrl_counts, ctrl, klet, kseq);
 		enrichments->enrichments[i] = katss_top_enrichment(test_counts, ctrl_counts, normalize);
 	}
