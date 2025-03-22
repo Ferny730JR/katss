@@ -1,0 +1,8 @@
+# Ignore vscode configuration files
+.vscode/
+
+# Ignore MacOS folder meta-data
+.DS_Store
+
+# Ignore cmake build files
+build/
