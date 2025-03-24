@@ -72,3 +72,25 @@ endif()
 
 set(CMAKE_C_FLAGS_DEBUG "-O0 -ggdb3")
 add_subdirectory(source)
+
+# Install rules
+if(NOT SKIP_INSTALL_ALL)
+	if(NOT SKIP_INSTALL_BINARIES)
+		install(TARGETS ikke kstruct
+			RUNTIME DESTINATION "${INSTALL_BIN_DIR}")
+	endif()
+
+	if(NOT SKIP_INSTALL_LIBRARIES)
+		set_target_properties(kkctr_static PROPERTIES
+			VERSION ${PROJECT_VERSION}
+			OUTPUT_NAME katss)
+		install(TARGETS kkctr_static
+			LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
+			ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")
+	endif()
+
+	if(NOT SKIP_INSTALL_HEADER)
+		install(FILES ${KKCTR_PUBLIC_HEADERS}
+			DESTINATION "${INSTALL_INC_DIR}/katss")
+	endif()
+endif()
