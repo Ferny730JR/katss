@@ -57,7 +57,7 @@ static KatssData *
 ushuffle(const char *test, KatssOptions *opts)
 {
 	KatssEnrichments *enr;
-	enr = katss_ikke_shuffle(test, NULL, opts->kmer, opts->probs_ntprec, opts->iters, opts->normalize);
+	enr = katss_ikke_shuffle(test, opts->kmer, opts->probs_ntprec, opts->iters, opts->normalize);
 	if(enr == NULL)
 		return NULL;
 	
