@@ -44,30 +44,10 @@ option(SEQF_SKIP_INSTALL_SHARED "Don't install shared library" OFF)
 option(SEQF_SKIP_INSTALL_HEADER "Don't install header files" OFF)
 
 # Find compression library
-message(CHECK_START "Finding ISA-L")
-find_library(COMPRESSION_LIB
-	NAMES isal
-	PATHS "/usr/lib"
-	      "/usr/lib64"
-	      "/usr/local/lib"
-	      "/usr/local/lib64"
-	      "$ENV{HOME}/.local/lib"
-	      "$ENV{HOME}/.local/lib64")
-find_path(COMPRESSION_INC
-	NAMES igzip_lib.h
-	PATHS "$ENV{HOME}/.local/include"
-	      "/usr/include"
-	      "/usr/local/include")
-if(COMPRESSION_LIB AND COMPRESSION_INC)
-	set(SEQF_HAS_ISA_L TRUE)
-	message(CHECK_PASS "found: " ${COMPRESSION_LIB})
-else()
-	set(SEQF_HAS_ISA_L FALSE)
-	message(CHECK_FAIL "not found, attempting ZLIB...")
-	find_package(ZLIB REQUIRED)
-	set(COMPRESSION_LIB ZLIB::ZLIB)
-	set(COMPRESSION_INC "")
-endif()
+set(SEQF_HAS_ISA_L FALSE)
+find_package(ZLIB REQUIRED)
+set(COMPRESSION_LIB ZLIB::ZLIB)
+set(COMPRESSION_INC "")
 
 set(CMAKE_C_FLAGS_DEBUG "-O0 -ggdb3")
 
