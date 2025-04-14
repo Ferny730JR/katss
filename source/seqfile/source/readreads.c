@@ -75,7 +75,13 @@ seqfsgets_unlocked(SeqFile file, char *buffer, size_t bufsize)
 
 		seqf_shiftandcopy(state, buf, left, eol);
 	} while(left && eol == NULL);
-	buf[0] = '\0';
+
+	/* seqfsgets read 0 bytes (at EOF) */
+	if((unsigned char *)buffer == buf)
+		return NULL;
+	
+	/* Null terminate the string */
+	*buf = '\0';
 
 	return buffer;
 }
