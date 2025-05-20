@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.9) # for IPO / LTO
+cmake_minimum_required(VERSION 3.10.0)
 project(KatssKmerCounter
 	VERSION 0.9.0
 	DESCRIPTION "K-mer counting function utilities."

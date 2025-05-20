@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.9.0) # 3.9 for IPO
+cmake_minimum_required(VERSION 3.10.0)
 project(SeqFile
 	VERSION 0.1.0
 	DESCRIPTION "An efficient fasta/fastq processing library"

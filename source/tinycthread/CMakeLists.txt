@@ -1,8 +1,8 @@
 # MODIFIED BY FRANCISCO F CAVAZOS
-# Set minimum to 3.5 for forward compatibility
+# Set minimum to 3.10 for forward compatibility
 # Added project version to silence warnings
 # Set the language to C
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.10)
 project(TinyCThread VERSION 1.1.2 LANGUAGES C)
 enable_testing()
 
