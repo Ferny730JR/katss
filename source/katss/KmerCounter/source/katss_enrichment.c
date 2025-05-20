@@ -628,6 +628,10 @@ katss_enrichment(const char *test, const char *ctrl, KatssOptions *opts)
 		}
 	}
 
+	/* If data is NULL, return NULL */
+	if(data == NULL)
+		return NULL;
+
 	/* Sort if necessary */
 	if(opts->sort_enrichments)
 		qsort(data->kmers, data->num_kmers, sizeof *data->kmers, compare);

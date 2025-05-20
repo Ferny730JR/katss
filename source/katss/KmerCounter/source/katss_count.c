@@ -249,6 +249,10 @@ katss_count(const char *path, KatssOptions *opts)
 		}
 	}
 
+	/* If data is NULL, reeturn NULL */
+	if(data == NULL)
+		return NULL;
+
 	/* Sort if necessary */
 	if(opts->sort_enrichments && opts->bootstrap_iters == 0) {
 		qsort(data->kmers, data->num_kmers, sizeof *data->kmers, compare1);
