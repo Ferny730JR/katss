@@ -33,7 +33,7 @@ seqf_qread(seqf_statep state, unsigned char *buffer, size_t bufsize)
 
 		/* Copy seq that wasn't fully read into internal buffer */
 		size_t offset = bufsize - buffer_end;
-		if(offset > SEQF_CHUNK) {
+		if(offset > state->out_bufsiz) {
 			seqferrno_ = 5;
 			return 0;
 		}
@@ -42,7 +42,7 @@ seqf_qread(seqf_statep state, unsigned char *buffer, size_t bufsize)
 		state->next = state->out_buf;
 	} else {
 		state->have = 0;
-		memset(state->out_buf, 0, SEQF_CHUNK);
+		memset(state->out_buf, 0, state->out_bufsiz);
 	}
 	buffer[buffer_end] = 0;
 	return buffer_end;

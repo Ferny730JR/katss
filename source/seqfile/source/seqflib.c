@@ -1,10 +1,26 @@
-/* seqflib.c - seqf functions for interacting with a SeqFile pointer
+/* seqflib.c - seqf functions for opening a SeqFile stream
  * 
- * Copyright (c) Francisco F. Cavazos 2024
+ * Copyright (c) 2024-2025 Francisco F. Cavazos
  * Subject to the MIT License
  */
 
 #include <stdlib.h>
+
+#include <fcntl.h>
+#ifdef _WIN32
+    #include <windows.h>
+    #include <io.h>
+    #define open _open
+    #define close _close
+    #define read _read
+    #define lseek _lseek
+    #define O_RDONLY _O_RDONLY
+    #define O_WRONLY _O_WRONLY
+    #define O_RDWR _O_RDWR
+    #define O_CREAT _O_CREAT
+#else
+    #include <unistd.h>
+#endif
 
 #include "seqf_core.h"
 
@@ -18,7 +34,7 @@
 static void
 init_seqfstatep(seqf_statep state)
 {
-	state->file = NULL;
+	state->fd = -1;
 	state->compression = PLAIN;
 	state->type = 'b';
 #ifndef _IGZIP_H
@@ -59,8 +75,9 @@ extract_mode(seqf_statep state, const char *mode)
 	} while(true);
 }
 
+
 SeqFile
-seqfopen(const char *path, const char *mode)
+seqfdopen(int fd, const char *mode)
 {
 	seqferrno_ = 0; // no error encountered. yet.
 
@@ -73,8 +90,8 @@ seqfopen(const char *path, const char *mode)
 	init_seqfstatep(seq_file);
 
 	/* Open file and check for errors */
-	seq_file->file = fopen(path, "r");
-	if(seq_file->file == NULL)
+	seq_file->fd = fd;
+	if(fd < 0)
 		EXIT_AND_SETERR(seq_file, 1);
 
 	/* Initialize mutex */
@@ -83,18 +100,27 @@ seqfopen(const char *path, const char *mode)
 	seq_file->mutex_is_init = true;
 
 	/* Set input and output buffers */
-	seq_file->in_buf = malloc(SEQF_CHUNK * sizeof *seq_file->in_buf);
+	seq_file->in_buf = malloc(SEQFBUFSIZ * sizeof *seq_file->in_buf);
 	if(seq_file->in_buf == NULL)
 		EXIT_AND_SETERR(seq_file, 6);
-	seq_file->out_buf = malloc(SEQF_CHUNK * sizeof *seq_file->out_buf);
+	seq_file->in_bufsiz = SEQFBUFSIZ;
+	seq_file->out_buf = malloc(2*SEQFBUFSIZ * sizeof *seq_file->out_buf);
 	if(seq_file->out_buf == NULL)
 		EXIT_AND_SETERR(seq_file, 6);
+	seq_file->out_bufsiz = 2*SEQFBUFSIZ;
 	seq_file->next = seq_file->out_buf;
 
 	/* Determine type of compression, if any */
-	if(fread(seq_file->in_buf, sizeof(unsigned char), 2, seq_file->file) != 2) {
+	size_t nread = 0;
+	do {
+		size_t n = read(seq_file->fd, seq_file->in_buf, 2);
+		if(n == -1) EXIT_AND_SETERR(seq_file, 3);
+		if(n == 0) break; // reached EOF before reading magic bytes
+		nread += n;
+	} while(nread != 2);
+	if(nread < 2) {
 		seq_file->compression = PLAIN;
-	} else if(seq_file->in_buf[0] == 0x1F && seq_file->in_buf[1] == 0x8B) {
+	} if(seq_file->in_buf[0] == 0x1F && seq_file->in_buf[1] == 0x8B) {
 		seq_file->compression = GZIP;
 	} else if (seq_file->in_buf[0] == 0x78 && (seq_file->in_buf[1] == 0x01 || 
 	  seq_file->in_buf[1] == 0x5E || seq_file->in_buf[1] == 0x9C || 
@@ -103,7 +129,7 @@ seqfopen(const char *path, const char *mode)
     } else {
 		seq_file->compression = PLAIN;
 	}
-	fseek(seq_file->file, 0, SEEK_SET);
+	lseek(seq_file->fd, 0, SEEK_SET);
 
 	/* Initialize decompressor */
 	if(seq_file->compression != PLAIN) {
@@ -140,6 +166,17 @@ seqfopen(const char *path, const char *mode)
 	return (SeqFile)seq_file;
 }
 
+SeqFile
+seqfopen(const char *path, const char *mode)
+{
+	int fd = open(path, O_RDONLY); // currently only support reading
+	if(fd == -1) {
+		seqferrno_ = 1;
+		return NULL;
+	}
+	return seqfdopen(fd, mode);
+}
+
 int
 seqfclose(SeqFile file)
 {
@@ -147,7 +184,7 @@ seqfclose(SeqFile file)
 		return 1;
 	int return_code = 0;
 	seqf_statep state = (seqf_statep)file;
-	if(state->file != NULL && fclose(state->file) == EOF)
+	if(state->fd > 2 && close(state->fd) == -1)
 		return_code = seqferrno_ = 1;
 	if(state->mutex_is_init)
 		mtx_destroy(&state->mutex);
@@ -167,11 +204,11 @@ int
 seqfrewind(SeqFile file)
 {
 	if(file == NULL)
-		return 1;
+		return -1;
 	seqf_statep state = (seqf_statep)file;
-	if(fseek(state->file, 0, SEEK_SET)==-1) {
+	if(lseek(state->fd, 0, SEEK_SET)==-1) {
 		seqferrno_ = 1;
-		return 1;
+		return -1;
 	}
 	state->have = 0;
 	state->eof = false;
@@ -187,9 +224,9 @@ seqfrewind(SeqFile file)
 		else if(state->compression == ZLIB)
 			ret = inflateReset(&state->stream);
 		else
-			return 1;
+			return -1;
 		if(ret != Z_OK)
-			return 1;
+			return -1;
 		state->stream.next_in = state->in_buf;
 	}
 #endif
@@ -200,4 +237,42 @@ bool
 seqfeof(SeqFile file)
 {
 	return ((seqf_statep)file)->eof;
+}
+
+int
+seqfsetibuf(SeqFile file, size_t bufsize)
+{
+	if(file == NULL)
+		return -1;
+	seqf_statep state = (seqf_statep)file;
+
+	unsigned char *t = realloc(state->in_buf, bufsize);
+	if(t == NULL) return -1;
+	state->in_buf = t;
+	state->in_bufsiz = bufsize;
+	return 0;
+}
+
+int
+seqfsetobuf(SeqFile file, size_t bufsize)
+{
+	if(file == NULL)
+		return -1;
+	seqf_statep state = (seqf_statep)file;
+
+	unsigned char *t = realloc(state->out_buf, bufsize);
+	if(t == NULL) return -1;
+	state->out_buf = t;
+	state->out_bufsiz = bufsize;
+	return 0;
+}
+
+int
+seqfsetbuf(SeqFile file, size_t bufsize)
+{
+	if(seqfsetibuf(file, bufsize) != 0)
+		return -1;
+	if(seqfsetobuf(file, bufsize << 1) != 0)
+		return -2;
+	return 0;
 }

@@ -1,6 +1,6 @@
 /* seqfile.h - API for the SeqFile parsing library
  *
- * Copyright (c) 2024 Francisco F. Cavazos
+ * Copyright (c) 2024-2025 Francisco F. Cavazos
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -37,6 +37,11 @@ extern "C" {
 #define SEQF_VERSION_MINOR 1
 #define SEQF_VERSION_PATCH 0
 
+#define SEQFBUFSIZ 8192
+#ifndef EOF
+#define EOF (-1)
+#endif
+
 /**
  * @brief Get the error number encountered by SeqFile
  * 
@@ -58,15 +63,33 @@ typedef struct SeqFile *SeqFile;
 
 
 /**
- * @brief Open an fasta/fastq/sequence files fo reading. Mode is used to specify which type
- * of file is used for reading. "a" for fasta, "q" for fastq, "s" for sequence file, and
- * "b" for binary.
+ * @brief Open a fasta/fastq/sequence file for reading. Mode is used to specify
+ * which type of file is used for reading. "a" for fasta, "q" for fastq, "s"
+ * for sequence file, and "b" for binary.
  * 
  * @param path Path to the file you want to open for reading
  * @param mode Type of file being opened
  * @return SeqFile 
  */
 SeqFile seqfopen(const char *path, const char *mode);
+
+
+/**
+ * @brief Open a fasta/fastq/sequence file for reading. Mode is used to specify
+ * which type of file is used for reading. "a" for fasta, "q" for fastq, "s"
+ * for sequence file, and "b" for binary. 
+ * 
+ * This takes an existing file descriptor (obtained through open/creat/dup/etc)
+ * and uses it to process SeqFile. Since SeqFile is currently only supported
+ * for file reading, the file descriptor must be opened with for reading. Once
+ * `seqfclose` is called, the the file descriptor will be closed alongside the
+ * SeqFile handle.
+ * 
+ * @param fd    File descriptor of the file you want to read
+ * @param mode  Type of file being opened
+ * @return SeqFile 
+ */
+SeqFile seqfdopen(int fd, const char *mode);
 
 
 /**
@@ -96,6 +119,50 @@ int seqfrewind(SeqFile file);
  * @return false if not at end of file
  */
 bool seqfeof(SeqFile file);
+
+
+/**
+ * @brief Set the input buffer of the SeqFile handle
+ * 
+ * The input buffer is only ever used if the file is in a compressed file
+ * format. If the file is not compressed, this will not affect the performance
+ * of the seqf* functions.
+ * 
+ * @param file    SeqFile handle to set the buffer to
+ * @param bufsize New size of the input buffer
+ * @return int 0 on success, -1 when not enough memory was available
+ */
+int
+seqfsetibuf(SeqFile file, size_t bufsize);
+
+
+/**
+ * @brief Set the output buffer of the SeqFile handle to be of size `bufsize`.
+ * 
+ * @param file    SeqFile handle to set the buffer to
+ * @param bufsize New size of the output buffer
+ * @return int 
+ */
+int
+seqfsetobuf(SeqFile file, size_t bufsize);
+
+
+/**
+ * @brief Set both the input buffer of the SeqFile handle to be of size
+ * `bufsize`, and the output buffer to be of size `2*bufsize`.
+ * 
+ * By default, the internal buffers used by SeqFile are of size `SEQFBUFSIZ`
+ * for the input buffer, and `2*SEQFBUFSIZ` for the output buffer. This
+ * function allows to use a custom buffer size instead of the default of
+ * `SEQFBUFSIZ`.
+ * 
+ * @param file    SeqFile handle to set the buffer to
+ * @param bufsize New size of the input/output buffers
+ * @return int 0 on success. -1 when failed to set input buffer, -2 when failed
+ * to set output buffer.
+ */
+int
+seqfsetbuf(SeqFile file, size_t bufsize);
 
 
 /**

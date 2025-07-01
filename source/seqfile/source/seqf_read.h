@@ -22,7 +22,7 @@
 
 /**
  * @brief Loads `buffer' with `bufsize' decompressed bytes and store the number
- * of decompressed bytes read into `read'. Returns 0 on success, 1 on a file
+ * of decompressed bytes read into `read'. Returns 0 on success, -1 on a file
  * read error, 2 when encountered end of file (no bytes left to read), and 3 
  * when there was en error decompressing the file stream.
  * 
@@ -38,7 +38,7 @@
  * @param read    Actual number of decompressed bytes read into buffer
  * @return int 
  */
-extern int seqf_load(seqf_statep state, unsigned char *buffer, size_t bufsize, size_t *read);
+extern int seqf_load(seqf_statep state, unsigned char *buffer, size_t bufsize, size_t *nread);
 
 
 /**

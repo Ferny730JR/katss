@@ -48,9 +48,15 @@ if(SEQF_BUILD_STATIC)
 	target_compile_definitions(seqf_static PRIVATE
 		_HAS_ISA_L_=$<BOOL:${KATSS_HAS_ISA_L}>)
 
-	set_target_properties(seqf_static PROPERTIES
-		VERSION ${PROJECT_VERSION}
-		OUTPUT_NAME seqf)
+	if(WIN32)
+		set_target_properties(seqf_static PROPERTIES
+			VERSION ${PROJECT_VERSION}
+			OUTPUT_NAME seqf_static)
+	else()
+		set_target_properties(seqf_static PROPERTIES
+			VERSION ${PROJECT_VERSION}
+			OUTPUT_NAME seqf)
+	endif()
 
 	if(ipo_is_supported)
 		set_property(TARGET seqf_static

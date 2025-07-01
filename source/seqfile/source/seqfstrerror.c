@@ -9,6 +9,14 @@
 
 #include "seqf_core.h"
 
+#ifdef _WIN32
+static int
+strerror_r(int errnum, char *buf, size_t bufsize)
+{
+	return strerror_s(buf, bufsize, errnum) == 0 ? 0 : -1;
+}
+#endif
+
 static const char seqf_err_msg[7][60] = {
 	"No error",
 	"Mutex failed to initialize",

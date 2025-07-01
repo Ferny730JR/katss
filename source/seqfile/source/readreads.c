@@ -18,7 +18,7 @@ seqf_sread(seqf_statep state, unsigned char *buffer, size_t bufsize)
 	if(buffer_end == bufsize) {
 		while(--buffer_end && buffer[buffer_end] != '\n');
 		size_t offset = bufsize - ++buffer_end; // increase to include \n
-		if(offset > SEQF_CHUNK) {
+		if(offset > state->out_bufsiz) {
 			seqferrno_ = 5;
 			return 0;
 		}
@@ -27,7 +27,7 @@ seqf_sread(seqf_statep state, unsigned char *buffer, size_t bufsize)
 		state->next = state->out_buf;
 	} else {
 		state->have = 0;
-		memset(state->out_buf, 0, SEQF_CHUNK);
+		memset(state->out_buf, 0, state->out_bufsiz);
 	}
 
 	buffer[buffer_end] = '\0';
@@ -71,7 +71,7 @@ seqfsgets_unlocked(SeqFile file, char *buffer, size_t bufsize)
 		if(state->have == 0 && seqf_fetch(state) != 0)
 			return NULL; // fetch encountered error
 		if(state->have == 0)
-			break;
+			break; // no more bytes, return what's left
 
 		seqf_shiftandcopy(state, buf, left, eol);
 	} while(left && eol == NULL);
