@@ -1,3 +1,6 @@
+#ifdef _WIN32
+#define _CRT_RAND_S
+#endif
 #include <stdlib.h>
 
 #include "memory_utils.h"
@@ -33,9 +36,15 @@ thread_safe_rand(thread_safe_rand_t *tsrand)
 {
 	if(tsrand != NULL) {
 		mtx_lock(&tsrand->lock);
-		int val = rand_r(&tsrand->seed);
+#ifdef _WIN32
+		unsigned int result = tsrand->seed;
+		rand_s(&result);
+		tsrand->seed = result;
+#else
+		int result = rand_r(&tsrand->seed);
+#endif
 		mtx_unlock(&tsrand->lock);
-		return val;
+		return result;
 	}
 	return -1;
 }
@@ -45,9 +54,14 @@ thread_safe_rand_r(thread_safe_rand_t *tsrand, unsigned int *seed)
 {
 	if(tsrand != NULL) {
 		mtx_lock(&tsrand->lock);
-		int val = rand_r(seed);
+#ifdef _WIN32
+		rand_s(seed);
+		int result = (int)(*seed);
+#else
+		int result = rand_r(seed);
+#endif
 		mtx_unlock(&tsrand->lock);
-		return val;
+		return result;
 	}
 	return -1;
 }

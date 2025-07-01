@@ -43,6 +43,9 @@ static double min(double a, double b) { return (a < b) ? a : b; }
 
 static double max(double a, double b) { return (a > b) ? a : b; }
 
+#ifdef _WIN32
+#define _USE_MATH_DEFINES
+#endif
 #include <float.h>
 #include <limits.h>
 #include <math.h>
@@ -1338,7 +1341,7 @@ static void bgrat(double a, double b, double x, double y, double *w, double eps,
    *          *w := log(exp(*w) + I_x(a,b)) = logspace_add(*w, log( I_x(a,b) ))
    * ----------------------------------------------------------------------- */
 
-  int n_terms_bgrat = 30;
+  #define n_terms_bgrat 30
   double c[n_terms_bgrat], d[n_terms_bgrat];
   double bm1 = b - 0.5 - 0.5,
          nu = a + bm1 * 0.5, /* nu = a + (b-1)/2 =: T, in (9.1) of
@@ -1548,7 +1551,7 @@ static double basym(double a, double b, double lambda, double eps, int log_p) {
   /* ------------------------ */
   /*     ****** NUM IS THE MAXIMUM VALUE THAT N CAN TAKE IN THE DO LOOP */
   /*            ENDING AT STATEMENT 50. IT IS REQUIRED THAT NUM BE EVEN. */
-  int num_IT = 20;
+  #define num_IT 20
   /*            THE ARRAYS A0, B0, C, D HAVE DIMENSION NUM + 1. */
 
   static double const e0 = 1.12837916709551;     /* e0 == 2/sqrt(pi) */

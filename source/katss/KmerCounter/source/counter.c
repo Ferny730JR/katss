@@ -1,3 +1,7 @@
+#ifdef _WIN32
+#define _CRT_RAND_S
+#define rand_r rand_s
+#endif
 #include <stdlib.h> // for random functions 
 #include <stdbool.h>
 #include <errno.h>
@@ -16,7 +20,6 @@
 #include "ushuffle.h"
 #include "seqfile.h"
 #include "thread_safe_rand.h"
-
 #define BUFFER_SIZE 65536U
 
 struct threadinfo {

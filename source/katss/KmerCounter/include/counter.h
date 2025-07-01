@@ -2,7 +2,6 @@
 #define KATSS_COUNTER_H
 
 #include <stdint.h>
-#include <stdatomic.h>
 
 #ifdef __cplusplus
 extern "C" {
