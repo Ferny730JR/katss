@@ -1,4 +1,5 @@
 #include <stdbool.h>
+#include <stdint.h>
 #include <string.h>
 #include <float.h>
 #include <math.h>
@@ -37,6 +38,11 @@ katss_compute_enrichments(KatssCounter *test, KatssCounter *control, bool normal
 		if(test_count == 0.0 || control_count == 0.0) { // Determine if enrichment is valid
 			enrichments->enrichments[i].enrichment = NAN;
 			continue;
+		}
+		if(test_count < 20 || control_count < 20) {
+			char kmer_str[20];
+			katss_unhash(kmer_str, i, test->kmer, false);
+			warning_message("count for `%s' is less than 20.", kmer_str);
 		}
 
 		double r_val = (test_count/test->total)/(control_count/control->total);
@@ -90,16 +96,21 @@ katss_compute_prob_enrichments(KatssCounter *test, KatssCounter *mono,
 		katss_unhash(kseq, i, test->kmer, true);
 
 		/* Get frequencies */
-		double test_frq, ctrl_frq;
-		katss_get_from_hash(test, KATSS_DOUBLE, &test_frq, i);
+		double test_count, test_frq, ctrl_frq;
+		katss_get_from_hash(test, KATSS_DOUBLE, &test_count, i);
 
-		test_frq = test_frq / test->total;
+		test_frq = test_count / test->total;
 		ctrl_frq = predict_kmer(kseq, mono, dint);
 
 		enrichments->enrichments[i].key = i; // Set key
 		if(test_frq == 0.0 || ctrl_frq == 0.0) { // Determine if enrichment is valid
 			enrichments->enrichments[i].enrichment = NAN;
 			continue;
+		}
+		if(test_count < 20) {
+			char kmer_str[20];
+			katss_unhash(kmer_str, i, test->kmer, false);
+			warning_message("count for `%s' is less than 20.", kmer_str);
 		}
 
 		double r_val = test_frq / ctrl_frq;
@@ -463,6 +474,15 @@ katss_top_enrichment(KatssCounter *test, KatssCounter *control, bool normalize)
 	top_kmer.enrichment = top_enrichment;
 	top_kmer.key = top_enrichment_hash;
 
+	/* Check count of top enrichment */
+	uint64_t count;
+	katss_get_from_hash(test, KATSS_UINT64, &count, top_kmer.key);
+	if(count < 20) {
+		char kmer_str[20];
+		katss_unhash(kmer_str, top_kmer.key, test->kmer, false);
+		warning_message("count for `%s' is less than 20.", kmer_str);
+	}
+
 	/* Everything (probably) worked! Hurray, now return. */
 	return top_kmer;
 }
@@ -504,6 +524,15 @@ katss_top_prediction(KatssCounter *test, KatssCounter *mono, KatssCounter *dint,
 	/* No top kmer was found (probs because something terrible happened) return empty struct */
 	if(top_enrichment == top_kmer.enrichment) {
 		return top_kmer;
+	}
+
+	/* Check count of top enrichment */
+	uint64_t count;
+	katss_get_from_hash(test, KATSS_UINT64, &count, top_kmer.key);
+	if(count < 20) {
+		char kmer_str[20];
+		katss_unhash(kmer_str, top_kmer.key, test->kmer, false);
+		warning_message("count for `%s' is less than 20.", kmer_str);
 	}
 
 	/* Fill struct with info */
