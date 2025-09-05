@@ -46,6 +46,7 @@ seqf_loadp(seqf_statep state, unsigned char *buffer, size_t bufsize, size_t *nre
 		if(n <= 0)
 			break;
 		left -= n;
+		buffer += n;
 	} while(left);
 	if(n == -1) {
 		seqferrno_ = 1;

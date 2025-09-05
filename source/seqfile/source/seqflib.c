@@ -169,7 +169,11 @@ seqfdopen(int fd, const char *mode)
 SeqFile
 seqfopen(const char *path, const char *mode)
 {
-	int fd = open(path, O_RDONLY); // currently only support reading
+	int flags = O_RDONLY;
+#ifdef _WIN32
+	flags |= O_BINARY;
+#endif
+	int fd = open(path, flags); // currently only support reading
 	if(fd == -1) {
 		seqferrno_ = 1;
 		return NULL;
@@ -228,6 +232,7 @@ seqfrewind(SeqFile file)
 		if(ret != Z_OK)
 			return -1;
 		state->stream.next_in = state->in_buf;
+		state->stream.avail_in = 0;
 	}
 #endif
 	return 0;

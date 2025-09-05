@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10.0)
+cmake_minimum_required(VERSION 3.10.0) # For forward compatability
 project(SeqFile
 	VERSION 0.1.0
 	DESCRIPTION "An efficient fasta/fastq processing library"
@@ -11,14 +11,19 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 set(CMAKE_C_STANDARD 11)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 include(CheckIncludeFile)
 CHECK_INCLUDE_FILE(threads.h HAVE_C11_THREADS)
 if(NOT HAVE_C11_THREADS)
 	set(THREAD_LIB tinycthread)
+	if(WIN32)
+		set(C11_THREADS_DEFINE "__STDC_NO_THREADS__=1")
+	endif()
 else()
 	find_package(Threads REQUIRED)
 	set(THREAD_LIB Threads::Threads)
+	set(NO_C11_THREADS_DEFINE "")
 endif()
 
 include(CheckIPOSupported)
@@ -49,7 +54,7 @@ find_package(ZLIB REQUIRED)
 set(COMPRESSION_LIB ZLIB::ZLIB)
 set(COMPRESSION_INC "")
 
-set(CMAKE_C_FLAGS_DEBUG "-O0 -ggdb3")
+set(CMAKE_C_FLAGS_DEBUG "-O0 -ggdb3 -Wall -Werror -Wpedantic")
 
 # Begin building project
 add_subdirectory(include)
@@ -61,13 +66,19 @@ endif(SEQF_BUILD_TESTS)
 # Install the library 
 if(NOT SEQF_SKIP_INSTALL_LIBRARIES AND NOT SEQF_SKIP_INSTALL_ALL)
 	if(NOT SEQF_SKIP_INSTALL_STATIC AND SEQF_BUILD_STATIC)
-		install(TARGETS seqf_static LIBRARY DESTINATION ${INSTALL_LIB_DIR})
+		install(TARGETS seqf_static
+		        ARCHIVE DESTINATION lib
+		        COMPONENT Static)
 	endif()
 	if(NOT SEQF_SKIP_INSTALL_SHARED AND SEQF_BUILD_SHARED)
-		install(TARGETS seqf_shared LIBRARY DESTINATION ${INSTALL_LIB_DIR})
+		install(TARGETS seqf_shared 
+		        LIBRARY DESTINATION lib
+		        COMPONENT Shared)
 	endif()
 endif()
 
 if(NOT SEQF_SKIP_INSTALL_HEADER AND NOT SEQF_SKIP_INSTALL_ALL)
-	install(FILES ${SEQF_PUBLIC_HEADERS} DESTINATION ${INSTALL_INC_DIR})
+	install(FILES ${SEQF_PUBLIC_HEADERS}
+	        DESTINATION include
+	        COMPONENT Headers)
 endif()
