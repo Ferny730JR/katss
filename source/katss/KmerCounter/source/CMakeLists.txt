@@ -36,7 +36,8 @@ target_link_libraries(kkctr_static PRIVATE
 	${EXTRA_LIBS})
 
 target_compile_definitions(kkctr_static PRIVATE
-	KATSS_VERBOSE=$<BOOL:${KKCTR_VERBOSE}>)
+	KATSS_VERBOSE=$<BOOL:${KKCTR_VERBOSE}>
+	${C11_THREADS_DEFINE})
 
 if(ipo_is_supported)
 	set_property(TARGET kkctr_static PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)

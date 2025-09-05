@@ -2,10 +2,10 @@
 #include <errno.h>
 #include <string.h>
 
-#if (__STDC_NO_THREADS__)
-#  include "tinycthread.h"
-#else
+#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L) && !defined(__STDC_NO_THREADS__)
 #  include <threads.h>
+#else
+#  include <tinycthread.h>
 #endif
 
 #include "katss_core.h"

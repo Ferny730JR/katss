@@ -1,10 +1,10 @@
 #ifndef THREAD_SAFE_RAND_H
 #define THREAD_SAFE_RAND_H
 
-#if (__STDC_NO_THREADS__)
-#  include "tinycthread.h"
-#else
+#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L) && !defined(__STDC_NO_THREADS__)
 #  include <threads.h>
+#else
+#  include <tinycthread.h>
 #endif
 
 struct thread_safe_rand_t {
