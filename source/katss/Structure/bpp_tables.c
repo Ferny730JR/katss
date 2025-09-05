@@ -5,17 +5,17 @@
 #include "memory_utils.h"
 #include "string_utils.h"
 
-#if (__STDC_NO_THREADS__)
-#  include "tinycthread.h"
-#else
+#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L) && !defined(__STDC_NO_THREADS__)
 #  include <threads.h>
+#else
+#  include <tinycthread.h>
 #endif
 
 #include "bpp_tables.h"
 
 typedef struct Hash {
 	unsigned int hash;
-	unsigned int errno;
+	unsigned int errnum;
 } Hash;
 
 struct kht_state {
@@ -85,7 +85,7 @@ kmer_add_value(kmerHashTable   *hash_table,
 	}
 
 	Hash hash_value = hash(key);
-	if(hash_value.errno == 1) {
+	if(hash_value.errnum == 1) {
 		return;
 	}
 
@@ -124,11 +124,11 @@ hash(const char *key)
 			case 'G': hash_value = hash_value * 4 + 2; break;
 			case 'T': hash_value = hash_value * 4 + 3; break;
 			case 'U': hash_value = hash_value * 4 + 3; break;
-			default : return (Hash){.hash = 0, .errno = 1};
+			default : return (Hash){.hash = 0, .errnum = 1};
 		}
 		key++;
 	}
-	return (Hash){.hash = hash_value, .errno = 0};
+	return (Hash){.hash = hash_value, .errnum = 0};
 }
 
 

@@ -9,6 +9,8 @@ target_link_libraries(katss_structure PRIVATE
 	KATSS_STRING
 	seqf_static
 	${THREAD_LIB})
+target_compile_definitions(katss_structure PRIVATE
+	${C11_THREADS_DEFINE})
 
 # Find ViennaRNA library
 find_library(LIBRARY_VRNA 
