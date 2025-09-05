@@ -50,7 +50,7 @@ if(SEQF_BUILD_STATIC)
 		_HAS_ISA_L_=$<BOOL:${KATSS_HAS_ISA_L}>
 		${C11_THREADS_DEFINE})
 
-	if(WIN32)
+	if(WIN32 AND MSVC)
 		set_target_properties(seqf_static PROPERTIES
 			VERSION ${PROJECT_VERSION}
 			OUTPUT_NAME seqf_static)

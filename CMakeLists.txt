@@ -54,14 +54,8 @@ add_subdirectory(source)
 # Install rules
 if(NOT SKIP_INSTALL_ALL)
 	if(NOT SKIP_INSTALL_BINARIES)
-		# kstruct currently not supported in Windows
-		if(NOT WIN32)
-			install(TARGETS ikke kstruct
-				RUNTIME DESTINATION "${INSTALL_BIN_DIR}")
-		else()
-			install(TARGETS ikke
-				RUNTIME DESTINATION "${INSTALL_BIN_DIR}")
-		endif()
+		install(TARGETS ikke
+		        RUNTIME DESTINATION "${INSTALL_BIN_DIR}")
 	endif()
 
 	if(NOT SKIP_INSTALL_LIBRARIES)
